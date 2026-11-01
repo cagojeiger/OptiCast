@@ -1,0 +1,60 @@
+# Pushing a tag vX.Y.Z builds the `opticast` sender for Linux (static musl) and
+# macOS and attaches them to a GitHub release. Asset names carry no version, so
+# .../releases/latest/download/opticast-<target>.tar.gz always works.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-musl, os: ubuntu-latest }
+          - { target: aarch64-unknown-linux-musl, os: ubuntu-24.04-arm }
+          - { target: aarch64-apple-darwin, os: macos-latest }
+          - { target: x86_64-apple-darwin, os: macos-latest }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - if: contains(matrix.target, 'musl')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - run: cargo build --release --locked -p opticast-cli --target ${{ matrix.target }}
+      - name: Package
+        shell: bash
+        run: |
+          name=opticast-${{ matrix.target }}
+          mkdir "$name"
+          cp target/${{ matrix.target }}/release/opticast LICENSE README.md "$name"/
+          tar czf "$name.tar.gz" "$name"
+          shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: opticast-${{ matrix.target }}
+          path: opticast-${{ matrix.target }}.tar.gz*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          merge-multiple: true
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "OptiCast $TAG" --generate-notes \
+            opticast-*.tar.gz opticast-*.tar.gz.sha256

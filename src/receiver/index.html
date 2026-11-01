@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b0d10" />
+    <title>OptiCast 수신기</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>OptiCast <span>수신기</span></h1>
+        <p id="status" data-testid="status">카메라를 시작하고 송신 화면을 비추세요.</p>
+      </header>
+
+      <section class="viewer">
+        <video id="preview" playsinline muted></video>
+        <canvas id="overlay"></canvas>
+      </section>
+
+      <section class="controls">
+        <button id="start" class="primary" data-testid="start">카메라 시작</button>
+        <button id="stop" hidden>정지</button>
+        <label class="button">동영상 파일<input id="file" type="file" accept="video/*" hidden /></label>
+        <button id="reset">초기화</button>
+      </section>
+
+      <section class="card">
+        <dl class="facts">
+          <div><dt>전송 ID</dt><dd id="transfer-id">—</dd></div>
+          <div><dt>파일</dt><dd id="filename">—</dd></div>
+          <div><dt>크기</dt><dd id="size">—</dd></div>
+          <div><dt>블록</dt><dd id="blocks" data-testid="blocks">0 / ?</dd></div>
+        </dl>
+        <progress id="progress" max="1" value="0"></progress>
+        <canvas id="blockmap" aria-label="수신 블록 지도"></canvas>
+      </section>
+
+      <section class="card result" id="result" hidden>
+        <p id="result-text" data-testid="result"></p>
+        <button id="download" class="primary" data-testid="download">파일 저장</button>
+      </section>
+
+      <section class="card">
+        <dl class="stats">
+          <div><dt>스캔</dt><dd id="stat-scan">0/s</dd></div>
+          <div><dt>인식</dt><dd id="stat-hit">0/s</dd></div>
+          <div><dt>디코드</dt><dd id="stat-ms">— ms</dd></div>
+          <div><dt>중복</dt><dd id="stat-dup">0</dd></div>
+          <div><dt>손상</dt><dd id="stat-bad">0</dd></div>
+          <div><dt>다른 전송</dt><dd id="stat-foreign">0</dd></div>
+          <div><dt>주기</dt><dd id="stat-cycle" data-testid="cycle">—</dd></div>
+          <div><dt>경과</dt><dd id="stat-elapsed">—</dd></div>
+        </dl>
+      </section>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

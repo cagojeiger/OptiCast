@@ -1,0 +1,43 @@
+{
+  "name": "opticast",
+  "version": "0.0.1",
+  "private": true,
+  "description": "One-way offline file transfer: a screen cyclically broadcasts optical frames, a phone browser camera reassembles the file.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "packageManager": "pnpm@10.29.3",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "opticast": "node src/sender/cli.ts",
+    "send": "node src/sender/cli.ts send",
+    "dev": "vite",
+    "dev:lan": "vite --host --mode https",
+    "build": "vite build",
+    "preview": "vite preview --host --mode https",
+    "wasm:build": "node tools/wasm-build.ts",
+    "dev:v2": "pnpm wasm:build && vite --config web/vite.config.ts",
+    "dev:v2:lan": "pnpm wasm:build && vite --config web/vite.config.ts --host --mode https",
+    "build:v2": "pnpm wasm:build && vite build --config web/vite.config.ts",
+    "typecheck": "tsc",
+    "test": "vitest run",
+    "e2e": "node tools/e2e-fake-camera.ts",
+    "e2e:v2": "node tools/e2e-v2.ts",
+    "probe:camera": "node tools/probe/distortions.ts",
+    "probe:tmux": "node tools/probe/tmux-cli.ts"
+  },
+  "dependencies": {
+    "jsqr": "^1.4.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/qrcode": "^1.5.6",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
+    "playwright-core": "^1.64.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}

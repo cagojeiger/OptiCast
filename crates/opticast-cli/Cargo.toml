@@ -1,0 +1,18 @@
+[package]
+name = "opticast-cli"
+description = "OptiCast v2 sender CLI"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "opticast"
+path = "src/main.rs"
+
+[dependencies]
+opticast-core.workspace = true
+clap = { version = "4", features = ["derive"] }
+crossterm = "0.28"
+signal-hook = "0.3"
+libc = "0.2"
