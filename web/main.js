@@ -3,7 +3,7 @@
 // canvas → decoder worker (WebAssembly) → progress, verified file, save/share.
 // Everything stays in this browser; nothing is uploaded.
 //
-// Every internal URL carries `?v=__V__`, which the Pages build replaces with
+// Every internal URL carries `?v=__V__`, which the deploy (ci.yml) replaces with
 // the commit, so a browser never mixes files from two deploys.
 
 import {
