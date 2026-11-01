@@ -1,0 +1,36 @@
+# Rust and TypeScript tests on every pull request and push to main.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: cargo fmt --all --check
+      - run: cargo test --workspace --release --locked
+      - run: cargo build --release --locked -p opticast-core --target wasm32-unknown-unknown
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      # The receiver test replays frames from the built sender through the built wasm.
+      - run: pnpm wasm:build
+      - run: pnpm test
