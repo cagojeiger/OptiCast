@@ -1,7 +1,7 @@
 //! Test-only simulator for the DiodeCam v2 receiver.
 //!
 //! 1. [`Terminal::rasterize`] draws a [`ModuleGrid`] the way a terminal shows the
-//!    sender's output (spec §2.1): `ssh` cells are 8×16 px with `▀` covering the
+//!    sender's output (spec §1.1): `ssh` cells are 8×16 px with `▀` covering the
 //!    top half of the glyph box, `vt100` cells are a single module; an optional
 //!    line gap at the bottom of each cell shows the cell background.
 //! 2. [`Camera::shoot`] films that screen: projective warp (plus optional

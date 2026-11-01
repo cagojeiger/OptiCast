@@ -1,4 +1,4 @@
-//! Terminal encoding (spec §2.1, §2.2) and its inverse.
+//! Terminal encoding (spec §1.1, §1.2) and its inverse.
 //!
 //! [`frame`] turns a module grid into the exact bytes the sender writes.
 //! [`Screen`] / [`parse_screen`] read terminal output — raw sender bytes or

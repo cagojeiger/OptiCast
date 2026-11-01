@@ -1,4 +1,4 @@
-//! Tiles (spec §4): 108 data bytes + 20 Reed–Solomon parity bytes = one 128-byte
+//! Tiles (spec §3): 108 data bytes + 20 Reed–Solomon parity bytes = one 128-byte
 //! codeword per 1024 data modules, whitened by position before it is drawn.
 //!
 //! Sender: [`Tile::encode`] → [`whiten`] (done by `frame::render`).
@@ -23,11 +23,11 @@ pub type Codeword = [u8; CODEWORD_BYTES];
 pub enum TileKind {
     /// A RaptorQ encoding symbol.
     Data = 1,
-    /// The 96-byte META block (spec §5).
+    /// The 96-byte META block (spec §4).
     Meta = 2,
 }
 
-/// A decoded tile (spec §4, "데이터 108바이트").
+/// A decoded tile (spec §3, "데이터 108바이트").
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Tile {
     pub kind: TileKind,
@@ -135,7 +135,7 @@ pub fn decode(raw: &Codeword, n: usize) -> Result<Tile, TileError> {
     Tile::decode_codeword(&cw).map(|(tile, _)| tile)
 }
 
-/// The whitening byte stream for tile position `n` (spec §4): xorshift32 seeded
+/// The whitening byte stream for tile position `n` (spec §3): xorshift32 seeded
 /// with 0x6F707463 ⊕ (0x9E3779B9 · (n + 1)), byte k = low 8 bits of step k + 1.
 pub fn whitening(n: usize) -> impl Iterator<Item = u8> {
     let mut s = 0x6F70_7463u32 ^ 0x9E37_79B9u32.wrapping_mul(n as u32 + 1);

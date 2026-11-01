@@ -3,7 +3,7 @@
 // Plain C ABI: no generated bindings. Works in a Worker and in Node.
 
 /**
- * What `receiver_stats` reports after each frame (docs/protocol.md).
+ * What `receiver_stats` reports after each frame (docs/web.md).
  * @typedef {object} ReceiverStats
  * @property {number} frames
  * @property {boolean} detected

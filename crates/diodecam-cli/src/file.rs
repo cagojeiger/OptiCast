@@ -1,4 +1,4 @@
-//! Input validation (spec §1): one regular file, at most `--max-bytes`.
+//! The file to send (`docs/cli.md`): one regular file, at most `--max-bytes`; size parsing.
 
 use std::fs::File;
 use std::io::{self, Read};

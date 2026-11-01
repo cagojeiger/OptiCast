@@ -1,5 +1,5 @@
 // @ts-check
-// Rolling numbers for the receiver screen (docs/protocol.md). Pure functions of
+// Rolling numbers for the receiver screen (docs/web.md). Pure functions of
 // timestamped samples, so they are unit-tested without a browser.
 
 /**
