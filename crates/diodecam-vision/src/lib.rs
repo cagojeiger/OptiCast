@@ -118,8 +118,6 @@ pub struct Vision {
     track: Option<Track>,
     stage: Option<Stage>,
     no_correction: bool,
-    /// Candidates of every full-search pass of the last frame, for diagnostics.
-    seen: Vec<(usize, Candidate)>,
     /// Frames in a row without a grid: picks which fallback pass runs.
     misses: u64,
 }
@@ -157,12 +155,6 @@ impl Vision {
         self.no_correction = off;
     }
 
-    /// Finder candidates of the last full search as (pass, x, y, module, bright, rows), for diagnostics.
-    #[doc(hidden)]
-    pub fn candidates(&self) -> Vec<(usize, f64, f64, f64, bool, u32)> {
-        self.seen.iter().map(|(p, c)| (*p, c.x, c.y, c.module(), c.bright, c.count)).collect()
-    }
-
     /// Finds and samples the grid in a `width`×`height` grayscale image
     /// (`None` also when `gray` holds fewer than `width`×`height` pixels).
     pub fn process(&mut self, gray: &[u8], width: usize, height: usize) -> Option<Detection> {
@@ -188,13 +180,11 @@ impl Vision {
         let long = width.max(height);
         let passes = [((long / 40).max(15), true), ((long / 16).max(15), true), ((long / 96).max(15), false)];
         let fallback = 1 + (self.misses % 2) as usize;
-        self.seen.clear();
-        for (pass, (window, smooth)) in passes.into_iter().enumerate().filter(|&(p, _)| p == 0 || p == fallback) {
+        for (_, (window, smooth)) in passes.into_iter().enumerate().filter(|&(p, _)| p == 0 || p == fallback) {
             self.cands.clear();
             let all = Rect { x0: 0, y0: 0, x1: width, y1: height };
             self.binarizer.binarize(&img, all, window | 1, smooth, &mut self.bitmap);
             finder::scan(&self.bitmap, 1, &mut self.cands);
-            self.seen.extend(self.cands.iter().filter(|c| c.count >= 3).map(|c| (pass, *c)));
             for t in finder::triples(&self.cands, 6) {
                 if let Some(d) = self.decode(&img, t, false) {
                     self.misses = 0;

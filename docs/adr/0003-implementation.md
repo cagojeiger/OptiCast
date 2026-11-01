@@ -18,7 +18,7 @@
 - **안전**: SHA-256 확인 전에는 저장 버튼이 없다. META 크기는 메모리를 잡기 전에 상한(기본 64 MiB, `?max=` 최대 512)과 비교한다.
   받은 조각과 검증된 파일은 IndexedDB에 저장해 새로고침 뒤 이어 받거나 다시 저장한다. 아무것도 업로드하지 않는다.
 - **홈 화면 앱**: manifest + 서비스 워커. 캐시 이름이 커밋이라 배포 사이에 파일이 섞이지 않고, 오프라인에서도 열린다.
-- **배포**: `main` push → GitHub Pages(WASM 빌드 + 파일 복사), `v*` 태그 → GitHub Releases(musl 정적 + macOS, 버전 없는 파일 이름).
+- **배포**: `main` push → 테스트 통과 후 GitHub Pages(WASM 빌드 + 파일 복사), `v*` 태그 → GitHub Releases(musl 정적 + macOS, 버전 없는 파일 이름).
 
 ## Rationale
 
