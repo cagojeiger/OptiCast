@@ -12,7 +12,7 @@ use std::io::{BufWriter, Write};
 
 use diodecam_core::{ansi, frame, Layout, Profile, SendOptions, Transfer};
 
-use crate::{FramesArgs, ProfileArg};
+use crate::args::{FramesArgs, ProfileArg};
 
 pub fn run(args: &FramesArgs) -> Result<(), String> {
     let shown = args.file.display().to_string();

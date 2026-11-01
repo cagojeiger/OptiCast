@@ -1,4 +1,4 @@
-//! Local-mean thresholding with an integral image (spec §9).
+//! Local-mean thresholding with an integral image (`docs/web.md` §6).
 
 /// A grayscale frame borrowed from the caller.
 #[derive(Clone, Copy)]

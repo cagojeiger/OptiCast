@@ -298,7 +298,7 @@ fn compressible_file_uses_deflate() {
 #[test]
 fn restart_with_new_r0_merges_symbols() {
     // Same file, same settings: the second sender has the same transfer ID, so
-    // symbols from both runs combine (spec §5).
+    // symbols from both runs combine (spec §4).
     let data = random_bytes(50_000, 8);
     let layout = Layout::for_terminal(Profile::Ssh, 120, 40).unwrap();
     let mut a = Transfer::prepare(&data, "f", SendOptions::default(), 1).unwrap();

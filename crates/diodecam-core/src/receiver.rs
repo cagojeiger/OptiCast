@@ -1,4 +1,4 @@
-//! Receiver side (spec §8): an [`Assembler`] takes decoded tiles in any order,
+//! Receiver side (spec §6): an [`Assembler`] takes decoded tiles in any order,
 //! confirms the transfer from META, de-duplicates (SBN, ESI), feeds RaptorQ and
 //! finally verifies size and SHA-256.
 //!

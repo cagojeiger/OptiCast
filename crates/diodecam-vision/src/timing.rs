@@ -1,4 +1,4 @@
-//! Timing lines (spec §3.3): 1-D profiles along a grid line, their edges, the
+//! Timing lines (spec §2.3): 1-D profiles along a grid line, their edges, the
 //! module count between two finders, and the projective spacing of modules
 //! along the line. Also the residual check of a homography against all four
 //! timing lines, and an edge-based correction for lens distortion.

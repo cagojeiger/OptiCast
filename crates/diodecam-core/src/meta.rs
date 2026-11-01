@@ -1,4 +1,4 @@
-//! The 96-byte META block (spec §5): transfer ID, file size, SHA-256,
+//! The 96-byte META block (spec §4): transfer ID, file size, SHA-256,
 //! compression, RaptorQ OTI and file name.
 
 use std::fmt;

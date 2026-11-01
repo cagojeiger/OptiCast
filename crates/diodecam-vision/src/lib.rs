@@ -1,5 +1,5 @@
-//! DiodeCam receiver vision (`docs/protocol.md` §9): finds the module grid
-//! of a frame (spec §3) in a grayscale camera image and samples
+//! DiodeCam receiver vision (`docs/web.md` §6): finds the module grid
+//! of a frame (spec §2) in a grayscale camera image and samples
 //! it into an [`diodecam_core::ModuleGrid`].
 //!
 //! Pipeline for one frame ([`Vision::process`]):

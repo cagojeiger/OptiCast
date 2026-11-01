@@ -1,4 +1,4 @@
-//! Sender side (spec §5, §6): prepares a transfer (optional deflate, SHA-256,
+//! Sender side (spec §4, §5): prepares a transfer (optional deflate, SHA-256,
 //! RaptorQ with T = 96, Al = 8) and fills frames with tiles: the source pass,
 //! then repair symbols forever, with META on a rotating tile position.
 
@@ -75,7 +75,7 @@ pub fn repair_esi(k: u32, r0: u32, i: u64) -> u32 {
     k + ((r0 as u64 + i) % span) as u32
 }
 
-/// The order of (SBN, ESI) pairs (spec §6): every source symbol once in block
+/// The order of (SBN, ESI) pairs (spec §5): every source symbol once in block
 /// round-robin order, then repair symbols from ESI K_b + r₀, also round-robin.
 /// The iterator never ends.
 #[derive(Clone, Debug)]

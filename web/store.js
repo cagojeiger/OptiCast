@@ -1,5 +1,5 @@
 // @ts-check
-// Resume support (docs/protocol.md): the collected tiles of an unfinished
+// Resume support (docs/web.md): the collected tiles of an unfinished
 // transfer are kept in IndexedDB under its transfer ID, in this browser only.
 //
 // Two object stores: `meta` (small records, read for eviction) and `tiles` (the

@@ -1,4 +1,4 @@
-//! Grid geometry (spec §2, §3): grid size per profile, the fixed pattern (quiet
+//! Grid geometry (spec §1, §2): grid size per profile, the fixed pattern (quiet
 //! border, finder marks, timing lines, format information) and the order of the
 //! data modules that carry the tiles.
 //!
@@ -17,10 +17,10 @@ pub const MIN_HEIGHT: usize = 20;
 pub const MIN_TILES: usize = 2;
 /// Largest width or height the 9-bit FI fields can carry.
 pub const MAX_SIDE: usize = 511;
-/// Terminal rows reserved for the status bar (spec §7).
+/// Terminal rows reserved for the status bar (`docs/cli.md`).
 pub const STATUS_ROWS: usize = 2;
 
-/// How modules map to terminal cells (spec §2).
+/// How modules map to terminal cells (spec §1).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Profile {
     /// One cell = two modules (top/bottom) drawn with `' '`, `'▀'` and reverse video.
@@ -61,7 +61,7 @@ impl Profile {
         }
     }
 
-    /// Grid size W×H for a terminal of `cols` × `rows` cells (spec §2). The last
+    /// Grid size W×H for a terminal of `cols` × `rows` cells (spec §1). The last
     /// column and the two status rows are never part of the grid.
     pub fn grid_size(self, cols: usize, rows: usize) -> (usize, usize) {
         let w = cols.saturating_sub(1).min(MAX_SIDE);
@@ -80,7 +80,7 @@ impl fmt::Display for Profile {
     }
 }
 
-/// Format information (spec §3.4): what a receiver needs to sample a frame.
+/// Format information (spec §2.4): what a receiver needs to sample a frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FormatInfo {
     pub profile: Profile,
@@ -153,7 +153,7 @@ pub fn crc8(bytes: &[u8]) -> u8 {
     CRC8.checksum(bytes)
 }
 
-/// The grid cannot hold a frame (spec §3.5): the sender shows a message instead.
+/// The grid cannot hold a frame (spec §2.5): the sender shows a message instead.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TooSmall {
     pub width: usize,
@@ -194,7 +194,7 @@ impl Layout {
         Layout::from_format(FormatInfo { profile, width, height })
     }
 
-    /// Layout for a terminal of `cols` × `rows` cells (spec §2).
+    /// Layout for a terminal of `cols` × `rows` cells (spec §1).
     pub fn for_terminal(profile: Profile, cols: usize, rows: usize) -> Result<Layout, TooSmall> {
         let (w, h) = profile.grid_size(cols, rows);
         Layout::new(profile, w, h)
@@ -273,14 +273,14 @@ pub fn min_rows(profile: Profile, cols: usize) -> Option<usize> {
     (STATUS_ROWS + 1..=STATUS_ROWS + MAX_SIDE).find(|&rows| Layout::for_terminal(profile, cols, rows).is_ok())
 }
 
-/// Builds the fixed pattern of spec §3.1–3.4. Requires W ≥ 68 and H ≥ 20 so that
+/// Builds the fixed pattern of spec §2.1–3.4. Requires W ≥ 68 and H ≥ 20 so that
 /// no two regions overlap.
 fn fixed_pattern(format: FormatInfo) -> Vec<u8> {
     let FormatInfo { width: w, height: h, .. } = format;
     let mut p = vec![DATA; w * h];
     let mut set = |x: usize, y: usize, v: bool| p[y * w + x] = v as u8;
 
-    // §3.1 quiet border.
+    // §2.1 quiet border.
     for x in 0..w {
         set(x, 0, false);
         set(x, h - 1, false);
@@ -290,7 +290,7 @@ fn fixed_pattern(format: FormatInfo) -> Vec<u8> {
         set(w - 1, y, false);
     }
 
-    // §3.2 finder marks, each wrapped in a 1-module separator of zeros.
+    // §2.2 finder marks, each wrapped in a 1-module separator of zeros.
     for (x0, y0, size) in [(2, 2, 7), (w - 9, 2, 7), (2, h - 9, 7), (w - 7, h - 7, 5)] {
         let c = (size / 2) as isize;
         for j in -1..=size as isize {
@@ -304,7 +304,7 @@ fn fixed_pattern(format: FormatInfo) -> Vec<u8> {
         }
     }
 
-    // §3.3 timing lines: alternate, starting with 1.
+    // §2.3 timing lines: alternate, starting with 1.
     for x in 10..=w - 11 {
         set(x, 5, (x - 10) % 2 == 0);
     }
@@ -318,7 +318,7 @@ fn fixed_pattern(format: FormatInfo) -> Vec<u8> {
         set(w - 6, y, (y - 10) % 2 == 0);
     }
 
-    // §3.4 format information, top and bottom copies.
+    // §2.4 format information, top and bottom copies.
     let bits = format.bits();
     for (i, &bit) in bits.iter().enumerate() {
         let (x, y) = fi_top_position(i);

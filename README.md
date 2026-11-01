@@ -39,32 +39,16 @@ SSH 터미널에 그린 흑백 격자를 폰 카메라로 찍어 파일을 옮�
 ```
 
 원본 조각을 한 바퀴 보낸 뒤 섞은 복구 조각을 끝없이 보내므로, 어떤 조각을 놓쳤는지와 상관없이 개수만 채우면 된다.
-규격은 [`docs/protocol.md`](docs/protocol.md), 결정과 이유는 [`docs/adr/`](docs/adr/README.md).
 
-## 개발
+## 문서
 
-```
-crates/diodecam-core/    배치·타일·RS·RaptorQ·META·ANSI·수신 조립 (I/O 없음, wasm32 빌드)
-crates/diodecam-cli/     diodecam 바이너리
-crates/diodecam-vision/  카메라 영상에서 격자 검출과 샘플링
-crates/diodecam-wasm/    vision + core 를 C ABI wasm 으로
-crates/diodecam-sim/     테스트용 래스터라이저와 가상 카메라
-web/                     수신 페이지 (빌드 없는 JS + Worker)
-tools/, test/            wasm 빌드, 로컬 서버, e2e, 테스트
-```
-
-```sh
-cargo test --workspace --release      # Rust 테스트
-pnpm install && pnpm typecheck
-pnpm wasm && pnpm test                # web/diodecam.wasm 빌드 후 JS 테스트
-pnpm serve                            # http://localhost:5173 에서 수신기
-pnpm e2e                              # 실제 송신 프레임 → 가상 카메라 → Chrome 수신기, 바이트 비교
-pnpm e2e --url https://cagojeiger.github.io/diodecam/ --resize-to 160x45 --headed
-```
-
-이 Mac처럼 rustup 기본 툴체인이 x86_64이면 cargo 앞에 `RUSTUP_TOOLCHAIN=stable-aarch64-apple-darwin
-DEVELOPER_DIR=/Library/Developer/CommandLineTools`를 붙인다(`pnpm` 스크립트는 자동). `main` push는 Pages를,
-`v*` 태그는 릴리스를 만든다. PR은 squash 머지, 제목은 `type(scope): 설명 (#N)`.
+| 문서 | 내용 |
+|---|---|
+| [`docs/cli.md`](docs/cli.md) | 송신기: 명령, 화면, 상태 줄, 키, 코드 구조 |
+| [`docs/web.md`](docs/web.md) | 수신기: 화면, 안내, 저장·이어 받기, 영상 처리 |
+| [`docs/protocol.md`](docs/protocol.md) | 송신기와 수신기가 함께 지키는 화면 형식 |
+| [`docs/development.md`](docs/development.md) | 빌드, 테스트, e2e, 배포, 릴리스 |
+| [`docs/adr/`](docs/adr/README.md) | 왜 이렇게 만들었나 |
 
 ## 안전 경계
 

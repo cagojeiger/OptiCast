@@ -1,5 +1,5 @@
 // @ts-check
-// DiodeCam receiver (docs/protocol.md): camera → requestVideoFrameCallback →
+// DiodeCam receiver (docs/web.md): camera → requestVideoFrameCallback →
 // canvas → decoder worker (WebAssembly) → progress, verified file, save/share.
 // Everything stays in this browser; nothing is uploaded.
 //

@@ -1,4 +1,4 @@
-//! Module grids (spec §3, §4): tiles → grid with the fixed pattern and filler,
+//! Module grids (spec §2, §3): tiles → grid with the fixed pattern and filler,
 //! and grid → raw tile bytes and format information for the receiver.
 
 use crate::layout::{fi_bottom_position, fi_top_position, FormatInfo, Layout, FI_BITS, MIN_HEIGHT};

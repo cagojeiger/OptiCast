@@ -12,9 +12,10 @@ use diodecam_core::layout::{min_rows, MIN_WIDTH};
 use diodecam_core::sender::R0_RANGE;
 use diodecam_core::{ansi, frame, FormatInfo, Layout, ModuleGrid, Profile, SendOptions, TooSmall, Transfer};
 
+use crate::args::SendArgs;
+use crate::file;
 use crate::status::{self, ascii, clock, thousands, Status};
 use crate::term::{self, Input, Signals, TerminalGuard, EXIT_SIGHUP, EXIT_SIGINT, EXIT_SIGTERM};
-use crate::{input, SendArgs};
 
 /// `+`/`-` move between these rates.
 pub const FPS_STEPS: [u32; 10] = [2, 3, 5, 8, 10, 12, 15, 20, 24, 30];
@@ -46,7 +47,7 @@ impl Exit {
 }
 
 pub fn run(args: &SendArgs, profile: Profile) -> Result<u8, String> {
-    let input = input::load(&args.file, args.max_bytes)?;
+    let input = file::load(&args.file, args.max_bytes)?;
     if !io::stdout().is_terminal() {
         return Err("send draws on the terminal, but stdout is not a terminal".into());
     }
