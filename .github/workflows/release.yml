@@ -1,6 +1,6 @@
-# Pushing a tag vX.Y.Z builds the `opticast` sender for Linux (static musl) and
+# Pushing a tag vX.Y.Z builds the `diodecam` sender for Linux (static musl) and
 # macOS and attaches them to a GitHub release. Asset names carry no version, so
-# .../releases/latest/download/opticast-<target>.tar.gz always works.
+# .../releases/latest/download/diodecam-<target>.tar.gz always works.
 name: Release
 
 on:
@@ -28,19 +28,19 @@ jobs:
           targets: ${{ matrix.target }}
       - if: contains(matrix.target, 'musl')
         run: sudo apt-get update && sudo apt-get install -y musl-tools
-      - run: cargo build --release --locked -p opticast-cli --target ${{ matrix.target }}
+      - run: cargo build --release --locked -p diodecam-cli --target ${{ matrix.target }}
       - name: Package
         shell: bash
         run: |
-          name=opticast-${{ matrix.target }}
+          name=diodecam-${{ matrix.target }}
           mkdir "$name"
-          cp target/${{ matrix.target }}/release/opticast LICENSE README.md "$name"/
+          cp target/${{ matrix.target }}/release/diodecam LICENSE README.md "$name"/
           tar czf "$name.tar.gz" "$name"
           shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256"
       - uses: actions/upload-artifact@v7
         with:
-          name: opticast-${{ matrix.target }}
-          path: opticast-${{ matrix.target }}.tar.gz*
+          name: diodecam-${{ matrix.target }}
+          path: diodecam-${{ matrix.target }}.tar.gz*
 
   release:
     needs: build
@@ -56,5 +56,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "OptiCast $TAG" --generate-notes \
-            opticast-*.tar.gz opticast-*.tar.gz.sha256
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "DiodeCam $TAG" --generate-notes \
+            diodecam-*.tar.gz diodecam-*.tar.gz.sha256

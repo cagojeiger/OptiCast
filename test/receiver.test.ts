@@ -1,7 +1,7 @@
 // The receiver (web/): the screen's rolling metrics, the resume store's pure
 // rules, and the WebAssembly receiver fed with real sender frames through the
 // terminal and camera simulators. The wasm test needs `pnpm wasm` and a built
-// `opticast` binary; it is skipped (with a note) when they are missing.
+// `diodecam` binary; it is skipped (with a note) when they are missing.
 
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
@@ -162,21 +162,21 @@ describe('wasm wrapper', () => {
   })
 })
 
-const WASM = resolve('web/opticast.wasm')
-/** The newest built `opticast` binary that has the hidden `frames` command. */
+const WASM = resolve('web/diodecam.wasm')
+/** The newest built `diodecam` binary that has the hidden `frames` command. */
 function senderBinary(): string | null {
-  const built = ['target/release/opticast', 'target/debug/opticast']
+  const built = ['target/release/diodecam', 'target/debug/diodecam']
     .map((p) => resolve(p))
     .filter((p) => existsSync(p))
     .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)
   return built.find((p) => spawnSync(p, ['frames', '--help']).status === 0) ?? null
 }
 const BIN = senderBinary()
-const skip = !existsSync(WASM) ? 'web/opticast.wasm missing: run `pnpm wasm`' : !BIN ? 'opticast binary missing: run `cargo build -p opticast-cli`' : false
+const skip = !existsSync(WASM) ? 'web/diodecam.wasm missing: run `pnpm wasm`' : !BIN ? 'diodecam binary missing: run `cargo build -p diodecam-cli`' : false
 
 describe('wasm receiver', { skip }, () => {
   it('restores a file from simulated camera frames, ignoring torn ones', { timeout: 60_000 }, async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'opticast-'))
+    const dir = mkdtempSync(join(tmpdir(), 'diodecam-'))
     try {
       const original = randomBytes(6000, 21)
       writeFileSync(join(dir, 'data.bin'), original)

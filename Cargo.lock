@@ -94,6 +94,49 @@ dependencies = [
 ]
 
 [[package]]
+name = "diodecam-cli"
+version = "0.3.0"
+dependencies = [
+ "crossterm",
+ "diodecam-core",
+ "signal-hook",
+]
+
+[[package]]
+name = "diodecam-core"
+version = "0.3.0"
+dependencies = [
+ "crc",
+ "flate2",
+ "raptorq",
+ "reed-solomon",
+ "sha2",
+]
+
+[[package]]
+name = "diodecam-sim"
+version = "0.3.0"
+dependencies = [
+ "diodecam-core",
+]
+
+[[package]]
+name = "diodecam-vision"
+version = "0.3.0"
+dependencies = [
+ "diodecam-core",
+ "diodecam-sim",
+]
+
+[[package]]
+name = "diodecam-wasm"
+version = "0.3.0"
+dependencies = [
+ "diodecam-core",
+ "diodecam-vision",
+]
+
+[[package]]
 name = "errno"
 version = "0.3.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -152,49 +195,6 @@ checksum = "b63fbc4a50860e98e7b2aa7804ded1db5cbc3aff9193adaff57a6931bf7c4b4c"
 dependencies = [
  "adler2",
  "simd-adler32",
-]
-
-[[package]]
-name = "opticast-cli"
-version = "0.2.0"
-dependencies = [
- "crossterm",
- "opticast-core",
- "signal-hook",
-]
-
-[[package]]
-name = "opticast-core"
-version = "0.2.0"
-dependencies = [
- "crc",
- "flate2",
- "raptorq",
- "reed-solomon",
- "sha2",
-]
-
-[[package]]
-name = "opticast-sim"
-version = "0.2.0"
-dependencies = [
- "opticast-core",
-]
-
-[[package]]
-name = "opticast-vision"
-version = "0.2.0"
-dependencies = [
- "opticast-core",
- "opticast-sim",
-]
-
-[[package]]
-name = "opticast-wasm"
-version = "0.2.0"
-dependencies = [
- "opticast-core",
- "opticast-vision",
 ]
 
 [[package]]

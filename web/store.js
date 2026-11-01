@@ -6,7 +6,7 @@
 // export bytes). Entries older than 7 days, or beyond 128 MiB in total (oldest
 // first), are evicted; a corrupt entry is deleted when it is loaded.
 
-const DB = 'opticast-v2'
+const DB = 'diodecam-v2'
 const VERSION = 2
 const META = 'meta'
 const TILES = 'tiles'

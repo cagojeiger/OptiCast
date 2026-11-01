@@ -1,16 +1,16 @@
-# OptiCast
+# DiodeCam
 
 SSH 터미널에 그린 흑백 격자를 폰 카메라로 찍어 파일을 옮기는 단방향 오프라인 파일 전송.
 네트워크, USB, 앱 설치가 필요 없다. 실기기(아이폰 Safari)로 16.9 MB를 받아 원본과 바이트 단위로 같은 것을 확인했다.
 
 ## 사용법
 
-1. 폰 Safari에서 **https://cagojeiger.github.io/OptiCast/** 를 열고 [카메라 시작].
+1. 폰 Safari에서 **https://cagojeiger.github.io/diodecam/** 를 열고 [카메라 시작].
 2. 서버에서 보낸다(리눅스용은 정적 바이너리):
 
    ```sh
-   curl -fsSL https://github.com/cagojeiger/OptiCast/releases/latest/download/opticast-x86_64-unknown-linux-musl.tar.gz | tar xz
-   ./opticast-x86_64-unknown-linux-musl/opticast send report.pdf
+   curl -fsSL https://github.com/cagojeiger/diodecam/releases/latest/download/diodecam-x86_64-unknown-linux-musl.tar.gz | tar xz
+   ./diodecam-x86_64-unknown-linux-musl/diodecam send report.pdf
    ```
 
    다른 대상: `aarch64-unknown-linux-musl`, `aarch64-apple-darwin`, `x86_64-apple-darwin`. 폴더는 `tar czf`로 묶는다.
@@ -44,11 +44,11 @@ SSH 터미널에 그린 흑백 격자를 폰 카메라로 찍어 파일을 옮�
 ## 개발
 
 ```
-crates/opticast-core/    배치·타일·RS·RaptorQ·META·ANSI·수신 조립 (I/O 없음, wasm32 빌드)
-crates/opticast-cli/     opticast 바이너리
-crates/opticast-vision/  카메라 영상에서 격자 검출과 샘플링
-crates/opticast-wasm/    vision + core 를 C ABI wasm 으로
-crates/opticast-sim/     테스트용 래스터라이저와 가상 카메라
+crates/diodecam-core/    배치·타일·RS·RaptorQ·META·ANSI·수신 조립 (I/O 없음, wasm32 빌드)
+crates/diodecam-cli/     diodecam 바이너리
+crates/diodecam-vision/  카메라 영상에서 격자 검출과 샘플링
+crates/diodecam-wasm/    vision + core 를 C ABI wasm 으로
+crates/diodecam-sim/     테스트용 래스터라이저와 가상 카메라
 web/                     수신 페이지 (빌드 없는 JS + Worker)
 tools/, test/            wasm 빌드, 로컬 서버, e2e, 테스트
 ```
@@ -56,10 +56,10 @@ tools/, test/            wasm 빌드, 로컬 서버, e2e, 테스트
 ```sh
 cargo test --workspace --release      # Rust 테스트
 pnpm install && pnpm typecheck
-pnpm wasm && pnpm test                # web/opticast.wasm 빌드 후 JS 테스트
+pnpm wasm && pnpm test                # web/diodecam.wasm 빌드 후 JS 테스트
 pnpm serve                            # http://localhost:5173 에서 수신기
 pnpm e2e                              # 실제 송신 프레임 → 가상 카메라 → Chrome 수신기, 바이트 비교
-pnpm e2e --url https://cagojeiger.github.io/OptiCast/ --resize-to 160x45 --headed
+pnpm e2e --url https://cagojeiger.github.io/diodecam/ --resize-to 160x45 --headed
 ```
 
 이 Mac처럼 rustup 기본 툴체인이 x86_64이면 cargo 앞에 `RUSTUP_TOOLCHAIN=stable-aarch64-apple-darwin

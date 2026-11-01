@@ -1,4 +1,4 @@
-# Publishes the phone receiver to GitHub Pages: https://cagojeiger.github.io/OptiCast/
+# Publishes the phone receiver to GitHub Pages: https://cagojeiger.github.io/diodecam/
 # No build tool: web/ is served as it is, next to the wasm built from Rust. Every
 # internal URL carries `?v=__V__`, replaced here with the commit, so a browser
 # never mixes files from two deploys.
@@ -27,13 +27,13 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release --locked --target wasm32-unknown-unknown -p opticast-wasm
+      - run: cargo build --release --locked --target wasm32-unknown-unknown -p diodecam-wasm
       - name: Assemble the site
         run: |
           mkdir _site
           cp web/*.html web/*.css web/*.js _site/
           sed -i "s/__V__/${GITHUB_SHA::7}/g" _site/*
-          cp target/wasm32-unknown-unknown/release/opticast_wasm.wasm _site/opticast.wasm
+          cp target/wasm32-unknown-unknown/release/diodecam_wasm.wasm _site/diodecam.wasm
       - uses: actions/upload-pages-artifact@v5
         with:
           path: _site

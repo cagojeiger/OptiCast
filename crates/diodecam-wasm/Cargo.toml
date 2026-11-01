@@ -1,0 +1,15 @@
+[package]
+name = "diodecam-wasm"
+description = "DiodeCam v2 receiver as a WebAssembly module with a plain C ABI"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+diodecam-core.workspace = true
+diodecam-vision.workspace = true
