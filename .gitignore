@@ -4,4 +4,4 @@ dist/
 .omc/
 .DS_Store
 target/
-web/wasm/*.wasm
+web/opticast.wasm

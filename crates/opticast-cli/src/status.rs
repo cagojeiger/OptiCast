@@ -1,4 +1,4 @@
-//! The two status lines (spec §7) and the number formats shared with `plan`.
+//! The two status lines (spec §7) and their number formats.
 
 use std::time::Duration;
 

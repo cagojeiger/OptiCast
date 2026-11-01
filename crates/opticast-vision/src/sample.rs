@@ -1,4 +1,4 @@
-//! Module sampling (receiver-v2 §2.6): each module centre through the
+//! Module sampling (spec §9): each module centre through the
 //! homography, a 3×3 pixel mean there, compared with the mean of the
 //! surrounding 7×7 modules (whitened data is half ones, so that mean sits
 //! between the two colors).

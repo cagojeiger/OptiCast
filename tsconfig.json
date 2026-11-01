@@ -4,15 +4,17 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "lib": ["es2023", "dom", "dom.iterable"],
-    "types": ["node", "vite/client"],
+    "types": ["node"],
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noEmit": true,
+    "allowJs": true,
+    "checkJs": true,
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "erasableSyntaxOnly": true,
     "isolatedModules": true,
     "skipLibCheck": true
   },
-  "include": ["src", "test", "tools", "web", "vite.config.ts", "vitest.config.ts"]
+  "include": ["web", "tools", "test"]
 }

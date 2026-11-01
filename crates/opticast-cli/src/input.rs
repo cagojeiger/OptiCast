@@ -1,9 +1,8 @@
 //! Input validation (spec §1): one regular file, at most `--max-bytes`.
 
-use std::fs::OpenOptions;
+use std::fs::File;
 use std::io::{self, Read};
 use std::os::unix::fs::FileTypeExt;
-use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
 use crate::status::ascii;
@@ -49,10 +48,7 @@ pub fn load(path: &Path, max_bytes: u64) -> Result<Input, String> {
     }
 
     let read_err = |e: io::Error| format!("{shown}: cannot read: {}", ascii(&e.to_string()));
-    // O_NONBLOCK: if the path was swapped for a FIFO since the check above, opening
-    // must not hang waiting for a writer; the re-check below then rejects it.
-    // (It has no effect on reads from a regular file.)
-    let file = OpenOptions::new().read(true).custom_flags(libc::O_NONBLOCK).open(path).map_err(read_err)?;
+    let file = File::open(path).map_err(read_err)?;
     // Re-check on the open handle in case the path changed in between.
     if !file.metadata().map_err(read_err)?.is_file() {
         return Err(format!("{shown} is not a regular file"));

@@ -1,4 +1,4 @@
-//! OptiCast v2 protocol core (`docs/protocol-v2.md`). No I/O, clocks or threads,
+//! OptiCast protocol core (`docs/protocol.md`). No I/O, clocks or threads,
 //! so the same code builds for the CLI sender and a wasm32 receiver.
 //!
 //! Sender pipeline, once per frame:
