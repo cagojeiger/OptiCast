@@ -82,17 +82,3 @@ fn bad_max_bytes_is_a_usage_error() {
     let out = opticast(&["send", "x", "--max-bytes", "lots"]);
     assert_eq!(out.status.code(), Some(2));
 }
-
-#[test]
-fn plan_with_given_size() {
-    let file = scratch("plan.bin");
-    std::fs::write(&file, (0..50_000u32).map(|i| (i.wrapping_mul(2_654_435_761) >> 24) as u8).collect::<Vec<_>>())
-        .unwrap();
-    let out = opticast(&["plan", file.to_str().unwrap(), "--cols", "60", "--rows", "20"]);
-    assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
-    let text = String::from_utf8(out.stdout).unwrap();
-    assert!(text.contains("60x20 (given)") && text.contains("too small"), "{text}");
-    for size in ["80x24", "120x40", "200x55", "199x106"] {
-        assert!(text.contains(size), "{size} missing:\n{text}");
-    }
-}

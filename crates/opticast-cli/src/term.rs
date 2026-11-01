@@ -2,13 +2,14 @@
 //! exit path: normal return (guard drop), signals (main loop sees the flag),
 //! and panics (hook).
 
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::mpsc::{self, Receiver};
 use std::sync::Arc;
 
 use crossterm::terminal;
 use opticast_core::ansi;
-use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
+use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM, SIGWINCH};
 
 /// True while the terminal is in raw mode on the alternate screen.
 static ACTIVE: AtomicBool = AtomicBool::new(false);
@@ -50,6 +51,49 @@ pub fn install_panic_hook() {
     }));
 }
 
+/// Keyboard input in raw mode, read on its own thread.
+pub enum Input {
+    Key(u8),
+    /// End of input: the terminal is gone (an SSH drop or a killed multiplexer
+    /// may send no SIGHUP).
+    Closed,
+}
+
+/// Reads stdin byte by byte. Escape sequences (arrow keys and the like) are
+/// dropped; a lone ESC is passed on.
+pub fn spawn_input() -> Receiver<Input> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut stdin = io::stdin().lock();
+        let mut buf = [0u8; 64];
+        loop {
+            match stdin.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => {
+                    for &key in keys(&buf[..n]) {
+                        if tx.send(Input::Key(key)).is_err() {
+                            return;
+                        }
+                    }
+                }
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
+                Err(_) => break,
+            }
+        }
+        let _ = tx.send(Input::Closed);
+    });
+    rx
+}
+
+/// The keys in one read: nothing for an escape sequence, else every byte.
+fn keys(chunk: &[u8]) -> &[u8] {
+    if chunk.len() > 1 && chunk[0] == 0x1b {
+        &[]
+    } else {
+        chunk
+    }
+}
+
 /// One locked write of the exact bytes, then flush.
 pub fn write_all(text: &str) -> io::Result<()> {
     let mut out = io::stdout().lock();
@@ -62,8 +106,12 @@ pub const EXIT_SIGINT: u8 = 130;
 pub const EXIT_SIGTERM: u8 = 143;
 pub const EXIT_SIGHUP: u8 = 129;
 
-/// Records the exit code of the last SIGINT/SIGTERM/SIGHUP received (0 = none).
-pub struct Signals(Arc<AtomicUsize>);
+/// Records the exit code of the last SIGINT/SIGTERM/SIGHUP received (0 = none)
+/// and whether the window was resized (SIGWINCH).
+pub struct Signals {
+    exit: Arc<AtomicUsize>,
+    resized: Arc<AtomicBool>,
+}
 
 impl Signals {
     /// The first signal sets the flag for the main loop. Handlers use SA_RESTART,
@@ -79,14 +127,35 @@ impl Signals {
             }
             signal_hook::flag::register_usize(signal, Arc::clone(&flag), code as usize)?;
         }
-        Ok(Signals(flag))
+        let resized = Arc::new(AtomicBool::new(false));
+        signal_hook::flag::register(SIGWINCH, Arc::clone(&resized))?;
+        Ok(Signals { exit: flag, resized })
     }
 
     /// The exit code of a pending signal, if any.
     pub fn pending(&self) -> Option<u8> {
-        match self.0.load(Ordering::SeqCst) {
+        match self.exit.load(Ordering::SeqCst) {
             0 => None,
             code => Some(code as u8),
         }
+    }
+
+    /// True once after each window resize.
+    pub fn resized(&self) -> bool {
+        self.resized.swap(false, Ordering::SeqCst)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::keys;
+
+    #[test]
+    fn escape_sequences_are_dropped() {
+        assert_eq!(keys(b"q"), b"q");
+        assert_eq!(keys(b"+-"), b"+-");
+        assert_eq!(keys(&[0x1b]), &[0x1b]); // lone ESC quits
+        assert!(keys(b"\x1b[A").is_empty()); // arrow up
+        assert!(keys(b"\x1b[200~").is_empty());
     }
 }

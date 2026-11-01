@@ -1,4 +1,4 @@
-//! Vision on simulated camera frames of real sender frames (receiver-v2 §5):
+//! Vision on simulated camera frames of real sender frames (spec §9):
 //! tilted and rotated views, blur, noise, both themes, line gaps, two camera
 //! resolutions and two terminal sizes; torn captures; tracking; lens correction;
 //! and a full transfer through the camera path.

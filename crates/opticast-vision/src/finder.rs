@@ -1,4 +1,4 @@
-//! Finder marks (receiver-v2 §2.3, spec §3.2): run-length search for the big
+//! Finder marks (spec §3.2, §9): run-length search for the big
 //! 1:1:3:1:1 marks in both polarities, cross-checked vertically, horizontally and
 //! diagonally; the small bottom-right mark by template search near a prediction.
 

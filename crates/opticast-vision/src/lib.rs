@@ -1,5 +1,5 @@
-//! OptiCast v2 receiver vision (`docs/receiver-v2.md` §2): finds the module grid
-//! of a frame (`docs/protocol-v2.md` §3) in a grayscale camera image and samples
+//! OptiCast receiver vision (`docs/protocol.md` §9): finds the module grid
+//! of a frame (spec §3) in a grayscale camera image and samples
 //! it into an [`opticast_core::ModuleGrid`].
 //!
 //! Pipeline for one frame ([`Vision::process`]):

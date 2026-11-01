@@ -1,0 +1,34 @@
+# ADR 0003: 구현 — Rust 공유 코어, 의존성 최소 CLI, 빌드 없는 웹 수신기
+
+- Status: Accepted
+- Date: 2026-11-01
+
+## Context
+
+송신기는 런타임을 들이기 어려운 격리 서버(배포판·glibc·아키텍처가 제각각)에서 돌고, 수신기는 앱 설치 없는
+아이폰 Safari에서 돈다. 그리는 형식과 읽는 형식이 어긋나면 안 된다. 기술은 최소로 유지한다.
+
+## Decision
+
+- **Rust 공유 코어** `opticast-core`(I/O 없음): 배치, 타일, RS, RaptorQ, META, ANSI, 수신 조립. 송신 CLI와 수신 WASM이 같은 코드를 쓴다.
+- **CLI** 의존성은 `crossterm`(raw 모드와 터미널 크기만, 이벤트 기능 끔)과 `signal-hook`뿐이다. 인자는 직접 파싱하고,
+  키 입력은 stdin 스레드, 창 크기 변경은 SIGWINCH로 받는다. stdin이 EOF면 터미널이 사라진 것이므로 끝낸다.
+- **수신기**는 빌드 단계 없는 순수 JS ES 모듈 + Web Worker + WASM(C ABI, wasm-bindgen 없음)이다.
+  비전(국소 평균 이진화, 런 길이 표식 탐색, 4점 호모그래피, 추적)은 외부 의존 없이 직접 만든다. 타입은 JSDoc + `tsc`로만 검사한다.
+- **안전**: SHA-256 확인 전에는 저장 버튼이 없다. META 크기는 메모리를 잡기 전에 상한(기본 64 MiB, `?max=` 최대 512)과 비교한다.
+  받은 조각은 IndexedDB에 저장해 새로고침 뒤 이어 받는다. 아무것도 업로드하지 않는다.
+- **배포**: `main` push → GitHub Pages(WASM 빌드 + 파일 복사), `v*` 태그 → GitHub Releases(musl 정적 + macOS, 버전 없는 파일 이름).
+
+## Rationale
+
+- Node/Python은 서버에 런타임이 필요하고, Go는 브라우저와 코어를 공유하기 어렵다. Rust는 정적 바이너리와 wasm32를 둘 다 준다.
+- `clap`은 옵션 4개짜리 CLI에 crate 십여 개를 더한다. crossterm 이벤트(mio)는 터미널이 사라지면 EOF에서 무한 반복한다
+  (0.28.1, upstream 미수정. 실제로 고아 프로세스가 CPU 100%로 4시간 남았다). 둘과 `libc`를 빼서 의존 crate 49 → 29, 바이너리 1.08 MB → 752 KB.
+- Vite·번들러·TS 빌드는 브라우저가 ES 모듈을 직접 실행하면 필요 없다. 정적 파일을 그대로 배포한다.
+- OpenCV.js(수 MB), zxing(QR 전용), AprilTag(C) 대신 자체 비전: 격자 구조를 알고 있어 할 일이 적다(1080p 전체 탐색 9.2 ms, 추적 1.7 ms).
+
+## Consequences
+
+- 규격 변경은 core 한 곳에서 송수신에 함께 반영된다.
+- 알려진 한계: 렌즈 왜곡 k1 > 0.018, 아이폰의 자동 렌즈 전환(가까이 찍을 때 초광각), 너무 작은 모듈에서 인식이 실패한다.
+  카메라 선택과 실패 단계 표시는 다음 작업이다.

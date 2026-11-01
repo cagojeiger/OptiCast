@@ -1,4 +1,4 @@
-//! Local-mean thresholding with an integral image (receiver-v2 §2.2).
+//! Local-mean thresholding with an integral image (spec §9).
 
 /// A grayscale frame borrowed from the caller.
 #[derive(Clone, Copy)]

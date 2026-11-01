@@ -4,16 +4,16 @@ use std::collections::hash_map::RandomState;
 use std::collections::VecDeque;
 use std::hash::BuildHasher;
 use std::io::{self, IsTerminal, Write};
+use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::time::{Duration, Instant};
 
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::terminal;
 use opticast_core::layout::{min_rows, MIN_WIDTH};
 use opticast_core::sender::R0_RANGE;
 use opticast_core::{ansi, frame, FormatInfo, Layout, ModuleGrid, Profile, SendOptions, TooSmall, Transfer};
 
 use crate::status::{self, ascii, clock, thousands, Status};
-use crate::term::{self, Signals, TerminalGuard, EXIT_SIGHUP, EXIT_SIGINT, EXIT_SIGTERM};
+use crate::term::{self, Input, Signals, TerminalGuard, EXIT_SIGHUP, EXIT_SIGINT, EXIT_SIGTERM};
 use crate::{input, SendArgs};
 
 /// `+`/`-` move between these rates.
@@ -63,8 +63,9 @@ pub fn run(args: &SendArgs, profile: Profile) -> Result<u8, String> {
     let (cols, rows) = terminal::size().map_err(|e| format!("cannot read the terminal size: {e}"))?;
     term::install_panic_hook();
     let guard = TerminalGuard::enter().map_err(|e| format!("cannot set up the terminal: {e}"))?;
+    let keys = term::spawn_input();
     let mut sender = Sender::new(transfer, input.name, profile, args.fps, cols as usize, rows as usize);
-    let result = sender.run(&signals);
+    let result = sender.run(&signals, &keys);
     drop(guard);
 
     let exit = match result {
@@ -147,11 +148,16 @@ impl Sender {
         }
     }
 
-    fn run(&mut self, signals: &Signals) -> io::Result<Exit> {
+    fn run(&mut self, signals: &Signals, keys: &Receiver<Input>) -> io::Result<Exit> {
         let mut next_due = Instant::now();
         loop {
             if let Some(code) = signals.pending() {
                 return Ok(Exit::Signal(code));
+            }
+            if signals.resized() {
+                let (cols, rows) = terminal::size()?;
+                self.resize(cols as usize, rows as usize);
+                next_due = Instant::now();
             }
             if Instant::now() >= next_due {
                 let streaming = !self.paused && self.layout.is_ok();
@@ -164,13 +170,10 @@ impl Sender {
                     now + Duration::from_millis(500) // idle: just refresh the status bar
                 };
             }
-            // Short polls keep signal handling responsive.
+            // Short waits keep signal handling responsive.
             let wait = next_due.saturating_duration_since(Instant::now()).min(Duration::from_millis(100));
-            if !event::poll(wait)? {
-                continue;
-            }
-            match event::read()? {
-                Event::Key(key) if key.kind != KeyEventKind::Release => match self.key(key) {
+            match keys.recv_timeout(wait) {
+                Ok(Input::Key(key)) => match self.key(key) {
                     KeyAction::Exit(exit) => return Ok(exit),
                     // Repaint the current grid with the new status bar; only the timer
                     // decides when the transfer advances, so typing cannot flood the link.
@@ -181,24 +184,20 @@ impl Sender {
                     }
                     KeyAction::Ignored => {}
                 },
-                Event::Resize(cols, rows) => {
-                    self.resize(cols as usize, rows as usize);
-                    next_due = Instant::now();
-                }
-                _ => {}
+                Err(RecvTimeoutError::Timeout) => {}
+                // The terminal is gone, whether or not a SIGHUP came with it.
+                Ok(Input::Closed) | Err(RecvTimeoutError::Disconnected) => return Ok(Exit::Signal(EXIT_SIGHUP)),
             }
         }
     }
 
-    fn key(&mut self, key: KeyEvent) -> KeyAction {
-        match key.code {
-            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                KeyAction::Exit(Exit::Signal(EXIT_SIGINT))
-            }
-            KeyCode::Char('q') | KeyCode::Esc => KeyAction::Exit(Exit::Quit),
-            KeyCode::Char('+') => self.set_fps(FPS_STEPS.iter().copied().find(|&s| s > self.fps)),
-            KeyCode::Char('-') => self.set_fps(FPS_STEPS.iter().rev().copied().find(|&s| s < self.fps)),
-            KeyCode::Char(' ') => {
+    fn key(&mut self, key: u8) -> KeyAction {
+        match key {
+            0x03 => KeyAction::Exit(Exit::Signal(EXIT_SIGINT)), // Ctrl-C in raw mode
+            b'q' | 0x1b => KeyAction::Exit(Exit::Quit),
+            b'+' => self.set_fps(FPS_STEPS.iter().copied().find(|&s| s > self.fps)),
+            b'-' => self.set_fps(FPS_STEPS.iter().rev().copied().find(|&s| s < self.fps)),
+            b' ' => {
                 self.paused = !self.paused;
                 self.meter.reset();
                 KeyAction::Changed

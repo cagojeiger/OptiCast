@@ -1,110 +1,192 @@
-//! `opticast`: OptiCast v2 sender. Draws a file as a stream of optical frames
-//! in the terminal for a phone camera to receive (`docs/protocol-v2.md`).
+//! `opticast`: OptiCast sender. Draws a file as a stream of optical frames
+//! in the terminal for a phone camera to receive (`docs/protocol.md`).
 
 mod frames;
 mod input;
-mod plan;
 mod send;
 mod status;
 mod term;
 
+use std::ffi::OsString;
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use clap::{Args, Parser, Subcommand, ValueEnum};
 use opticast_core::Profile;
 
 pub const DEFAULT_FPS: u32 = 24;
 pub const DEFAULT_MAX_BYTES: u64 = 64 << 20;
 
-#[derive(Parser)]
-#[command(
-    name = "opticast",
-    version,
-    about = "One-way optical file transfer: draw a file as frames for a phone camera"
-)]
-struct Cli {
-    #[command(subcommand)]
-    command: Command,
-}
+const USAGE: &str = "\
+One-way optical file transfer: draw a file as frames for a phone camera
 
-#[derive(Subcommand)]
-enum Command {
-    /// Broadcast a file in this terminal until you quit
-    Send(SendArgs),
-    /// Show the frame layout and expected time without sending
-    Plan(PlanArgs),
-    /// Write consecutive frames' ANSI text to a file (for receiver tests)
-    #[command(hide = true)]
-    Frames(FramesArgs),
-}
+Usage: opticast send <FILE> [OPTIONS]
 
-#[derive(Args)]
+Options:
+      --fps <N>           Frames per second, 1-60 [default: 24]
+      --profile <P>       auto, ssh (half blocks) or vt100 (spaces only) [default: auto]
+      --max-bytes <SIZE>  Refuse larger files, e.g. 512KiB, 64MiB [default: 64MiB]
+      --no-compress       Do not try deflate
+  -h, --help              Print help
+  -V, --version           Print version
+
+Keys while sending: + / - fps, space pause, q quit. Pack directories with tar first.
+";
+
 pub struct SendArgs {
-    /// The regular file to send (pack directories with tar first)
     pub file: PathBuf,
-    /// Frames per second (+/- change it while sending)
-    #[arg(long, default_value_t = DEFAULT_FPS, value_parser = clap::value_parser!(u32).range(1..=60))]
     pub fps: u32,
-    /// Cell encoding: ssh (half blocks), vt100 (spaces only), or auto
-    #[arg(long, value_enum, default_value_t = ProfileArg::Auto)]
     pub profile: ProfileArg,
-    /// Refuse files larger than this (e.g. 64MiB, 512KiB)
-    #[arg(long, default_value = "64MiB", value_parser = input::parse_size)]
     pub max_bytes: u64,
-    /// Do not try deflate
-    #[arg(long)]
     pub no_compress: bool,
 }
 
-#[derive(Args)]
-pub struct PlanArgs {
-    /// The file to plan for
-    pub file: PathBuf,
-    /// Terminal columns to plan for instead of the current terminal
-    #[arg(long, requires = "rows", value_parser = clap::value_parser!(u16).range(1..))]
-    pub cols: Option<u16>,
-    /// Terminal rows to plan for instead of the current terminal
-    #[arg(long, requires = "cols", value_parser = clap::value_parser!(u16).range(1..))]
-    pub rows: Option<u16>,
-}
-
-#[derive(Args)]
+/// `opticast frames` (hidden): consecutive frames' ANSI text, for receiver tests.
 pub struct FramesArgs {
-    /// The file to encode
     pub file: PathBuf,
-    /// Terminal columns
-    #[arg(long, value_parser = clap::value_parser!(u16).range(1..))]
     pub cols: u16,
-    /// Terminal rows
-    #[arg(long, value_parser = clap::value_parser!(u16).range(1..))]
     pub rows: u16,
-    /// Frames to write
-    #[arg(long)]
     pub count: u64,
-    /// Frames generated and dropped first (a receiver joining mid-stream)
-    #[arg(long, default_value_t = 0)]
+    /// Frames generated and dropped first (a receiver joining mid-stream).
     pub skip: u64,
-    /// Cell encoding (auto is ssh here)
-    #[arg(long, value_enum, default_value_t = ProfileArg::Ssh)]
     pub profile: ProfileArg,
-    /// First repair ESI offset r0 (the sender picks it at random)
-    #[arg(long, default_value_t = 0)]
+    /// First repair ESI offset r0 (`send` picks it at random).
     pub r0: u32,
-    /// Do not try deflate
-    #[arg(long)]
     pub no_compress: bool,
-    /// Output: JSON lines, a header object then {"index", "ansi"} per frame
-    #[arg(long)]
+    /// JSON lines: a header object, then {"index", "ansi"} per frame.
     pub out: PathBuf,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProfileArg {
     Auto,
     Ssh,
     Vt100,
+}
+
+enum Command {
+    Send(SendArgs),
+    Frames(FramesArgs),
+    Print(String),
+}
+
+/// One subcommand's arguments: positional values and `--name value` /
+/// `--name=value` / bare `--flag` options (the last one wins).
+struct Opts {
+    positional: Vec<PathBuf>,
+    options: Vec<(String, Option<String>)>,
+}
+
+impl Opts {
+    fn parse(mut args: impl Iterator<Item = OsString>, valued: &[&str], flags: &[&str]) -> Result<Opts, String> {
+        let mut opts = Opts { positional: Vec::new(), options: Vec::new() };
+        while let Some(arg) = args.next() {
+            let text = arg.to_string_lossy().into_owned();
+            let Some(option) = text.strip_prefix("--") else {
+                opts.positional.push(PathBuf::from(arg));
+                continue;
+            };
+            let (name, inline) = match option.split_once('=') {
+                Some((name, value)) => (name, Some(value.to_string())),
+                None => (option, None),
+            };
+            let value = if valued.contains(&name) {
+                match inline {
+                    Some(value) => Some(value),
+                    None => Some(args.next().ok_or(format!("--{name} needs a value"))?.to_string_lossy().into_owned()),
+                }
+            } else if flags.contains(&name) && inline.is_none() {
+                None
+            } else {
+                return Err(format!("unknown option `--{}`", status::ascii(name)));
+            };
+            opts.options.push((name.to_string(), value));
+        }
+        Ok(opts)
+    }
+
+    fn file(&self) -> Result<PathBuf, String> {
+        match self.positional.as_slice() {
+            [file] => Ok(file.clone()),
+            [] => Err("missing <FILE>".into()),
+            _ => Err("expected one <FILE>".into()),
+        }
+    }
+
+    fn value(&self, name: &str) -> Option<&str> {
+        self.options.iter().rev().find(|(n, _)| n == name).and_then(|(_, v)| v.as_deref())
+    }
+
+    fn flag(&self, name: &str) -> bool {
+        self.options.iter().any(|(n, _)| n == name)
+    }
+
+    fn number<T: std::str::FromStr + PartialOrd + std::fmt::Display>(
+        &self,
+        name: &str,
+        default: Option<T>,
+        range: std::ops::RangeInclusive<T>,
+    ) -> Result<T, String> {
+        let value = match (self.value(name), default) {
+            (Some(text), _) => text.parse().map_err(|_| format!("invalid --{name} `{}`", status::ascii(text)))?,
+            (None, Some(default)) => default,
+            (None, None) => return Err(format!("missing --{name}")),
+        };
+        if !range.contains(&value) {
+            return Err(format!("--{name} must be {}..={}", range.start(), range.end()));
+        }
+        Ok(value)
+    }
+
+    fn profile(&self, default: ProfileArg) -> Result<ProfileArg, String> {
+        match self.value("profile") {
+            None => Ok(default),
+            Some("auto") => Ok(ProfileArg::Auto),
+            Some("ssh") => Ok(ProfileArg::Ssh),
+            Some("vt100") => Ok(ProfileArg::Vt100),
+            Some(other) => Err(format!("invalid --profile `{}` (auto, ssh or vt100)", status::ascii(other))),
+        }
+    }
+}
+
+fn parse(args: Vec<OsString>) -> Result<Command, String> {
+    let help = |a: &OsString| a == "-h" || a == "--help" || a == "help";
+    if args.is_empty() || args.iter().any(help) {
+        return Ok(Command::Print(USAGE.into()));
+    }
+    if args.iter().any(|a| a == "-V" || a == "--version") {
+        return Ok(Command::Print(format!("opticast {}\n", env!("CARGO_PKG_VERSION"))));
+    }
+    let mut args = args.into_iter();
+    let command = args.next().unwrap_or_default();
+    match command.to_string_lossy().as_ref() {
+        "send" => {
+            let opts = Opts::parse(args, &["fps", "profile", "max-bytes"], &["no-compress"])?;
+            Ok(Command::Send(SendArgs {
+                file: opts.file()?,
+                fps: opts.number("fps", Some(DEFAULT_FPS), 1..=60)?,
+                profile: opts.profile(ProfileArg::Auto)?,
+                max_bytes: opts.value("max-bytes").map_or(Ok(DEFAULT_MAX_BYTES), input::parse_size)?,
+                no_compress: opts.flag("no-compress"),
+            }))
+        }
+        "frames" => {
+            let valued = ["cols", "rows", "count", "skip", "profile", "r0", "out"];
+            let opts = Opts::parse(args, &valued, &["no-compress"])?;
+            Ok(Command::Frames(FramesArgs {
+                file: opts.file()?,
+                cols: opts.number("cols", None, 1..=u16::MAX)?,
+                rows: opts.number("rows", None, 1..=u16::MAX)?,
+                count: opts.number("count", None, 0..=u64::MAX)?,
+                skip: opts.number("skip", Some(0), 0..=u64::MAX)?,
+                profile: opts.profile(ProfileArg::Ssh)?,
+                r0: opts.number("r0", Some(0), 0..=u32::MAX)?,
+                no_compress: opts.flag("no-compress"),
+                out: PathBuf::from(opts.value("out").ok_or("missing --out")?),
+            }))
+        }
+        other => Err(format!("unknown command `{}`", status::ascii(other))),
+    }
 }
 
 /// Picks the profile (spec §2). `auto` is `ssh` unless we run under tmux or
@@ -137,17 +219,22 @@ fn resolve_profile(arg: ProfileArg, env: impl Fn(&str) -> Option<String>) -> (Pr
 }
 
 fn main() -> ExitCode {
-    let cli = Cli::parse();
-    let env = |k: &str| std::env::var(k).ok();
-    let result = match &cli.command {
+    let command = match parse(std::env::args_os().skip(1).collect()) {
+        Ok(command) => command,
+        Err(message) => {
+            let _ = writeln!(io::stderr(), "opticast: error: {message}\nRun `opticast --help` for usage.");
+            return ExitCode::from(2);
+        }
+    };
+    let result = match &command {
+        Command::Print(text) => io::stdout().write_all(text.as_bytes()).map(|()| 0).map_err(|e| e.to_string()),
         Command::Send(args) => {
-            let (profile, warning) = resolve_profile(args.profile, env);
+            let (profile, warning) = resolve_profile(args.profile, |k| std::env::var(k).ok());
             if let Some(w) = warning {
                 let _ = writeln!(io::stderr(), "{w}");
             }
             send::run(args, profile)
         }
-        Command::Plan(args) => plan::run(args, resolve_profile(ProfileArg::Auto, env).0).map(|()| 0),
         Command::Frames(args) => frames::run(args).map(|()| 0),
     };
     match result {
@@ -167,6 +254,10 @@ mod tests {
         move |k| vars.iter().find(|(name, _)| *name == k).map(|(_, v)| v.to_string())
     }
 
+    fn args(line: &str) -> Vec<OsString> {
+        line.split_whitespace().map(OsString::from).collect()
+    }
+
     #[test]
     fn auto_profile() {
         let auto = |vars| resolve_profile(ProfileArg::Auto, env_of(vars)).0;
@@ -183,8 +274,40 @@ mod tests {
     }
 
     #[test]
-    fn cli_definition_is_valid() {
-        use clap::CommandFactory;
-        Cli::command().debug_assert();
+    fn send_arguments() {
+        let Ok(Command::Send(a)) = parse(args("send f.bin")) else { panic!("send f.bin") };
+        assert_eq!(a.file, PathBuf::from("f.bin"));
+        assert_eq!((a.fps, a.profile, a.max_bytes, a.no_compress), (24, ProfileArg::Auto, 64 << 20, false));
+        let line = "send --fps=15 f.bin --profile vt100 --max-bytes 1KiB --no-compress";
+        let Ok(Command::Send(a)) = parse(args(line)) else { panic!("{line}") };
+        assert_eq!((a.fps, a.profile, a.max_bytes, a.no_compress), (15, ProfileArg::Vt100, 1024, true));
+        for bad in [
+            "send",
+            "send a b",
+            "send f --fps 0",
+            "send f --fps x",
+            "send f --fps",
+            "send f --nope",
+            "send f --profile x",
+        ] {
+            assert!(parse(args(bad)).is_err(), "{bad}");
+        }
+        assert!(parse(args("nope f")).is_err());
+    }
+
+    #[test]
+    fn frames_arguments() {
+        let line = "frames f --cols 200 --rows 55 --count 3 --out o.jsonl --skip 7";
+        let Ok(Command::Frames(a)) = parse(args(line)) else { panic!("{line}") };
+        assert_eq!((a.cols, a.rows, a.count, a.skip, a.r0, a.profile), (200, 55, 3, 7, 0, ProfileArg::Ssh));
+        assert!(parse(args("frames f --cols 200 --rows 55 --count 3")).is_err(), "--out is required");
+    }
+
+    #[test]
+    fn help_and_version() {
+        for line in ["", "--help", "send -h", "help"] {
+            assert!(matches!(parse(args(line)), Ok(Command::Print(t)) if t.contains("Usage")), "{line}");
+        }
+        assert!(matches!(parse(args("-V")), Ok(Command::Print(t)) if t.starts_with("opticast ")));
     }
 }

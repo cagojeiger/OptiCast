@@ -1,4 +1,4 @@
-# Rust and TypeScript tests on every pull request and push to main.
+# Rust tests, then the web receiver's typecheck and tests, on every pull request and push to main.
 name: CI
 
 on:
@@ -32,5 +32,5 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       # The receiver test replays frames from the built sender through the built wasm.
-      - run: pnpm wasm:build
+      - run: pnpm wasm
       - run: pnpm test

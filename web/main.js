@@ -1,28 +1,17 @@
-// OptiCast receiver v2 (docs/receiver-v2.md): camera → requestVideoFrameCallback
-// → canvas → decoder worker (WebAssembly) → progress, verified file, save/share.
+// @ts-check
+// OptiCast receiver (docs/protocol.md): camera → requestVideoFrameCallback →
+// canvas → decoder worker (WebAssembly) → progress, verified file, save/share.
 // Everything stays in this browser; nothing is uploaded.
+//
+// Every internal URL carries `?v=__V__`, which the Pages build replaces with
+// the commit, so a browser never mixes files from two deploys.
 
-import {
-  HINT_TEXT,
-  eta,
-  formatBytes,
-  formatSeconds,
-  fps,
-  hint,
-  limitMib,
-  recognition,
-  safeName,
-  scanWidth,
-  symbolRate,
-  thousands,
-  tooLargeText,
-  trim,
-  type FrameSample,
-  type ProgressSample,
-} from './metrics.ts'
-import type { FromWorker, ToWorker } from './protocol.ts'
-import { store } from './store.ts'
-import type { ReceiverStats } from './wasm.ts'
+import { HINT_TEXT, eta, formatBytes, formatSeconds, fps, hint, limitMib, recognition, safeName, scanWidth, symbolRate, thousands, tooLargeText, trim } from './metrics.js?v=__V__'
+import * as store from './store.js?v=__V__'
+
+/** @import { FrameSample, ProgressSample } from './metrics.js' */
+/** @import { ReceiverStats } from './wasm.js' */
+/** @import { FromWorker, ToWorker } from './worker.js' */
 
 const params = new URLSearchParams(location.search)
 /** `?scan=`: width of the image handed to the decoder (see scanWidth). */
@@ -31,23 +20,22 @@ const SCAN_PARAM = params.get('scan')
 const LIMIT_MIB = limitMib(params.get('max'))
 const DEBUG = params.get('debug') === '1'
 
-const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T
-const video = $<HTMLVideoElement>('preview')
-const overlay = $<HTMLCanvasElement>('overlay')
+/** @param {string} id */
+const $ = (id) => /** @type {HTMLElement} */ (document.getElementById(id))
+const video = /** @type {HTMLVideoElement} */ ($('preview'))
+const overlay = /** @type {HTMLCanvasElement} */ ($('overlay'))
 const statusEl = $('status')
-const startBtn = $<HTMLButtonElement>('start')
-const resetBtn = $<HTMLButtonElement>('reset')
+const startBtn = /** @type {HTMLButtonElement} */ ($('start'))
 const fileNameEl = $('file-name')
 const fileSizeEl = $('file-size')
 const fileIdEl = $('file-id')
 const symbolsEl = $('symbols')
 const percentEl = $('percent')
-const progressEl = $<HTMLProgressElement>('progress')
+const progressEl = /** @type {HTMLProgressElement} */ ($('progress'))
 const hintEl = $('hint')
 const resultEl = $('result')
 const resultText = $('result-text')
-const downloadBtn = $<HTMLButtonElement>('download')
-const shareBtn = $<HTMLButtonElement>('share')
+const shareBtn = $('share')
 const debugEl = $('debug')
 const stat = {
   capture: $('stat-capture'),
@@ -61,83 +49,95 @@ const stat = {
 }
 
 const scanCanvas = document.createElement('canvas')
-const scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true })!
-const overlayCtx = overlay.getContext('2d')!
+const scanCtx = /** @type {CanvasRenderingContext2D} */ (scanCanvas.getContext('2d', { willReadFrequently: true }))
+const overlayCtx = /** @type {CanvasRenderingContext2D} */ (overlay.getContext('2d'))
 
-const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })
-const send = (msg: ToWorker, transfer: Transferable[] = []) => worker.postMessage(msg, transfer)
+const worker = new Worker(new URL('./worker.js?v=__V__', import.meta.url), { type: 'module' })
+/**
+ * @param {ToWorker} msg
+ * @param {Transferable[]} [transfer]
+ */
+const send = (msg, transfer = []) => worker.postMessage(msg, transfer)
 send({ type: 'limit', mib: LIMIT_MIB })
 if (DEBUG) {
   send({ type: 'debug', on: true })
   debugEl.hidden = false
-  // Test hook: make the decoder take its trap-recovery path.
-  Object.assign(window, { opticastDebug: { trap: () => send({ type: 'simulate-trap' }) } })
 }
 
-let stream: MediaStream | null = null
+/** @type {MediaStream | null} */
+let stream = null
 let scanning = false
 let starting = false
 let busy = false
-let seq = 0
-/** Bumped by stopCamera(): frame callbacks of an earlier start chain exit. */
+/** Bumped when the camera starts or stops: frame callbacks of an earlier chain exit. */
 let loopGen = 0
-let frameHandle: { rvfc: boolean; id: number } | null = null
 /** Bumped by reset(): results of IndexedDB reads that started before it are dropped. */
 let resetGen = 0
-let settings: MediaTrackSettings = {}
-let last: ReceiverStats | null = null
+/** @type {MediaTrackSettings} */
+let settings = {}
+/** @type {ReceiverStats | null} */
+let last = null
 let decodeMs = 0
-let frames: FrameSample[] = []
-let progress: ProgressSample[] = []
-let captureTimes: number[] = []
-let resultTimes: number[] = []
+/** @type {FrameSample[]} */
+let frames = []
+/** @type {ProgressSample[]} */
+let progress = []
+/** @type {number[]} */
+let captureTimes = []
+/** @type {number[]} */
+let resultTimes = []
 let workerError = ''
-let download: { url: string; name: string; file: File } | null = null
-/** Transfer IDs already looked up in IndexedDB (cleared for an ID after a decoder restart). */
-const resumeChecked = new Set<string>()
+/** @type {{ url: string, name: string, file: File } | null} */
+let download = null
+/** @type {Set<string>} Transfer IDs already looked up in IndexedDB. */
+const resumeChecked = new Set()
 let resumed = 0
 /** `kept` when the last export was requested; the next runs only when it grew. */
 let exportedKept = 0
 /** Verification failures seen; a new one means the saved tiles are poisoned. */
 let failedSeen = 0
 let renderQueued = false
-let wakeLock: WakeLockSentinel | null = null
+/** @type {WakeLockSentinel | null} */
+let wakeLock = null
 
-function setStatus(text: string, tone: 'ok' | 'warn' | 'bad' | '' = ''): void {
+/**
+ * @param {string} text
+ * @param {'ok' | 'warn' | 'bad' | ''} [tone]
+ */
+function setStatus(text, tone = '') {
   statusEl.textContent = text
   statusEl.dataset.tone = tone
 }
 
 // --- capture ------------------------------------------------------------------
 
-function schedule(gen: number): void {
+/** @param {number} gen */
+function schedule(gen) {
   if (!scanning || gen !== loopGen) return
-  if ('requestVideoFrameCallback' in video) frameHandle = { rvfc: true, id: video.requestVideoFrameCallback((now) => onFrame(now, gen)) }
-  else frameHandle = { rvfc: false, id: requestAnimationFrame((now) => onFrame(now, gen)) }
+  if ('requestVideoFrameCallback' in video) video.requestVideoFrameCallback((now) => onFrame(now, gen))
+  else requestAnimationFrame((now) => onFrame(now, gen))
 }
 
-function cancelFrames(): void {
-  loopGen++
-  if (frameHandle?.rvfc) video.cancelVideoFrameCallback(frameHandle.id)
-  else if (frameHandle) cancelAnimationFrame(frameHandle.id)
-  frameHandle = null
-}
-
-function onFrame(now: number, gen: number): void {
+/**
+ * @param {number} now
+ * @param {number} gen
+ */
+function onFrame(now, gen) {
   if (!scanning || gen !== loopGen) return
   try {
     captureTimes.push(now)
     captureTimes = captureTimes.filter((t) => t > now - 2000)
     if (!busy) grab(now)
   } catch (err) {
-    workerError = `프레임을 읽지 못했습니다: ${(err as Error).message}`
+    workerError = `프레임을 읽지 못했습니다: ${/** @type {Error} */ (err).message}`
     queueRender()
   } finally {
     schedule(gen)
   }
 }
 
-function grab(now: number): void {
+/** @param {number} now */
+function grab(now) {
   const vw = video.videoWidth
   const vh = video.videoHeight
   if (!vw || !vh || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return
@@ -148,20 +148,15 @@ function grab(now: number): void {
     scanCanvas.height = overlay.height = height
   }
   scanCtx.drawImage(video, 0, 0, width, height)
-  const pixels = scanCtx.getImageData(0, 0, width, height).data.buffer as ArrayBuffer
-  send({ type: 'frame', id: ++seq, width, height, pixels, capturedAt: now }, [pixels])
+  const pixels = scanCtx.getImageData(0, 0, width, height).data.buffer
+  send({ type: 'frame', width, height, pixels, capturedAt: now }, [pixels])
   busy = true
 }
 
-worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
+worker.onmessage = (/** @type {MessageEvent<FromWorker>} */ { data }) => {
   switch (data.type) {
-    case 'ready':
-      break
     case 'result':
       onResult(data)
-      break
-    case 'dropped':
-      busy = false
       break
     case 'exported':
       void saveProgress(data.transferId, data.bytes, data.tiles)
@@ -169,34 +164,31 @@ worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
     case 'imported':
       onImported(data)
       break
-    case 'restarted': {
-      // The new instance starts empty: look the transfer up in IndexedDB again.
-      const id = last?.meta?.id
-      if (id) {
-        resumeChecked.delete(id)
-        void tryResume(id)
-      }
-      failedSeen = 0
-      workerError = '디코더를 다시 시작했습니다. 저장된 진행 상태에서 이어 받습니다.'
-      queueRender()
-      break
-    }
     case 'error':
-      if (data.id !== undefined || data.fatal) busy = false
-      workerError = data.message
+      busy = false
       console.error(`decoder: ${data.message}`)
+      if (data.fatal) fatal()
+      else workerError = data.message
       queueRender()
       break
   }
 }
 // A crashed worker never replies; without this the loop would wait on `busy` forever.
 worker.onerror = (event) => {
-  busy = false
-  workerError = `디코더 오류: ${event.message}`
+  console.error(`decoder: ${event.message}`)
+  fatal()
   queueRender()
 }
 
-function onResult(r: Extract<FromWorker, { type: 'result' }>): void {
+/** The decoder is gone: stop, and let a reload pick up the saved progress. */
+function fatal() {
+  stopCamera()
+  startBtn.disabled = true
+  workerError = '디코더 오류 — 새로고침하면 저장된 진행분에서 이어 받습니다.'
+}
+
+/** @param {Extract<FromWorker, { type: 'result' }>} r */
+function onResult(r) {
   busy = false
   const now = performance.now()
   const s = r.stats
@@ -210,7 +202,7 @@ function onResult(r: Extract<FromWorker, { type: 'result' }>): void {
   if (s.meta) {
     if (s.failed > failedSeen) {
       // A failed verification restarts the decode: what was saved is poisoned.
-      if (store.available) void store.remove(s.meta.id).catch(() => {})
+      store.remove(s.meta.id).catch(() => {})
       exportedKept = 0
     }
     if (!resumeChecked.has(s.meta.id)) {
@@ -226,7 +218,8 @@ function onResult(r: Extract<FromWorker, { type: 'result' }>): void {
 
 // --- overlay --------------------------------------------------------------------
 
-function drawOverlay(s: ReceiverStats): void {
+/** @param {ReceiverStats} s */
+function drawOverlay(s) {
   overlayCtx.clearRect(0, 0, overlay.width, overlay.height)
   const c = s.corners
   if (!c || c.some((v) => v === null)) return
@@ -235,7 +228,7 @@ function drawOverlay(s: ReceiverStats): void {
   overlayCtx.strokeStyle = ok >= 0.7 ? '#3ddc97' : ok > 0 ? '#f5a524' : '#f2555a'
   overlayCtx.lineWidth = line
   overlayCtx.beginPath()
-  for (let i = 0; i < 4; i++) overlayCtx.lineTo(c[i * 2]!, c[i * 2 + 1]!)
+  for (let i = 0; i < 4; i++) overlayCtx.lineTo(c[i * 2] ?? 0, c[i * 2 + 1] ?? 0)
   overlayCtx.closePath()
   overlayCtx.stroke()
   if (!DEBUG) return
@@ -244,17 +237,19 @@ function drawOverlay(s: ReceiverStats): void {
   for (let i = 0; i + 1 < f.length; i += 2) overlayCtx.fillRect((f[i] ?? -99) - line, (f[i + 1] ?? -99) - line, 2 * line, 2 * line)
   const centers = s.tile_centers ?? []
   for (let n = 0; 2 * n + 1 < centers.length; n++) {
-    if (centers[2 * n] === null || centers[2 * n + 1] === null) continue
+    const x = centers[2 * n]
+    const y = centers[2 * n + 1]
+    if (x == null || y == null) continue
     overlayCtx.fillStyle = s.tile_status[n] === '1' ? '#3ddc97' : '#f2555a'
     overlayCtx.beginPath()
-    overlayCtx.arc(centers[2 * n]!, centers[2 * n + 1]!, line * 2.5, 0, Math.PI * 2)
+    overlayCtx.arc(x, y, line * 2.5, 0, Math.PI * 2)
     overlayCtx.fill()
   }
 }
 
 // --- screen ---------------------------------------------------------------------
 
-function queueRender(): void {
+function queueRender() {
   if (renderQueued) return
   renderQueued = true
   requestAnimationFrame(() => {
@@ -263,7 +258,7 @@ function queueRender(): void {
   })
 }
 
-function render(): void {
+function render() {
   const s = last
   const capture = fps(captureTimes)
   const processed = fps(resultTimes)
@@ -323,7 +318,7 @@ function render(): void {
 
 // --- camera -----------------------------------------------------------------------
 
-async function startCamera(): Promise<void> {
+async function startCamera() {
   if (starting || scanning) return
   if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
     setStatus('카메라를 쓸 수 없습니다. HTTPS 또는 localhost로 접속했는지 확인하세요.', 'bad')
@@ -343,18 +338,17 @@ async function startCamera(): Promise<void> {
         frameRate: { ideal: 60 },
       },
     })
-    const [track] = stream.getVideoTracks()
-    settings = track?.getSettings() ?? {}
+    settings = stream.getVideoTracks()[0]?.getSettings() ?? {}
     video.srcObject = stream
     await video.play()
-    cancelFrames() // never two capture chains
+    loopGen++ // never two capture chains
     scanning = true
     startBtn.textContent = '카메라 정지'
     void keepAwake()
     schedule(loopGen)
   } catch (err) {
     stopCamera()
-    setStatus(`카메라를 열지 못했습니다: ${(err as Error).message}`, 'bad')
+    setStatus(`카메라를 열지 못했습니다: ${/** @type {Error} */ (err).message}`, 'bad')
   } finally {
     starting = false
     startBtn.disabled = false
@@ -363,7 +357,7 @@ async function startCamera(): Promise<void> {
 }
 
 /** Long receives should not be cut short by auto-lock (Screen Wake Lock, Safari 16.4+). */
-async function keepAwake(): Promise<void> {
+async function keepAwake() {
   try {
     wakeLock = (await navigator.wakeLock?.request('screen')) ?? null
   } catch {
@@ -371,11 +365,11 @@ async function keepAwake(): Promise<void> {
   }
 }
 
-function stopCamera(): void {
+function stopCamera() {
   void wakeLock?.release().catch(() => {})
   wakeLock = null
   scanning = false
-  cancelFrames()
+  loopGen++
   stream?.getTracks().forEach((t) => t.stop())
   stream = null
   video.srcObject = null
@@ -385,7 +379,11 @@ function stopCamera(): void {
 
 // --- completion, save, share ----------------------------------------------------------
 
-function finish(file: ArrayBuffer, s: ReceiverStats): void {
+/**
+ * @param {ArrayBuffer} file
+ * @param {ReceiverStats} s
+ */
+function finish(file, s) {
   const name = safeName(s.meta?.name ?? 'file')
   const blob = new Blob([file], { type: 'application/octet-stream' })
   if (download) URL.revokeObjectURL(download.url)
@@ -396,10 +394,10 @@ function finish(file: ArrayBuffer, s: ReceiverStats): void {
   resultText.textContent = `✓ SHA-256 확인 · ${name} (${formatBytes(file.byteLength)}) · id ${s.meta?.id ?? ''}`
   shareBtn.hidden = !(navigator.canShare?.({ files: [download.file] }) ?? false)
   setStatus('수신 완료. 파일을 저장하세요.', 'ok')
-  if (s.meta && store.available) void store.remove(s.meta.id).catch(() => {})
+  if (s.meta) store.remove(s.meta.id).catch(() => {})
 }
 
-function saveFile(): void {
+function saveFile() {
   if (!download) return
   const a = document.createElement('a')
   a.href = download.url
@@ -409,19 +407,19 @@ function saveFile(): void {
   a.remove()
 }
 
-async function shareFile(): Promise<void> {
+async function shareFile() {
   if (!download) return
   try {
     await navigator.share({ files: [download.file], title: download.name })
   } catch (err) {
-    if ((err as Error).name !== 'AbortError') setStatus(`공유하지 못했습니다: ${(err as Error).message}`, 'warn')
+    if (/** @type {Error} */ (err).name !== 'AbortError') setStatus(`공유하지 못했습니다: ${/** @type {Error} */ (err).message}`, 'warn')
   }
 }
 
 // --- resume (IndexedDB) -------------------------------------------------------------------
 
-async function tryResume(id: string): Promise<void> {
-  if (!store.available) return
+/** @param {string} id */
+async function tryResume(id) {
   const gen = resetGen
   try {
     const saved = await store.load(id)
@@ -432,11 +430,12 @@ async function tryResume(id: string): Promise<void> {
   }
 }
 
-function onImported(data: Extract<FromWorker, { type: 'imported' }>): void {
+/** @param {Extract<FromWorker, { type: 'imported' }>} data */
+function onImported(data) {
   if (data.generation !== resetGen) return
-  const id = data.stats.meta?.id
   if (data.tiles < 0) {
-    if (id && store.available) void store.remove(id).catch(() => {}) // unreadable: drop it
+    const id = data.stats.meta?.id
+    if (id) store.remove(id).catch(() => {}) // unreadable: drop it
     return
   }
   resumed = data.tiles
@@ -446,12 +445,17 @@ function onImported(data: Extract<FromWorker, { type: 'imported' }>): void {
   queueRender()
 }
 
-async function saveProgress(id: string | null, tiles: ArrayBuffer, count: number): Promise<void> {
+/**
+ * @param {string | null} id
+ * @param {ArrayBuffer} tiles
+ * @param {number} count
+ */
+async function saveProgress(id, tiles, count) {
   const meta = last?.meta
-  if (!id || !meta || meta.id !== id || last?.done || !store.available || count <= 0) return
+  if (!id || !meta || meta.id !== id || last?.done || count <= 0) return
   const gen = resetGen
   try {
-    // Never replace a saved entry with a smaller one (e.g. right after a decoder restart).
+    // Never replace a saved entry with a smaller one (an export made while saved tiles were being re-imported).
     const stored = await store.info(id)
     if (gen !== resetGen || (stored && stored.tiles > count)) return
     await store.save({ id, name: meta.name, size: meta.size, savedAt: Date.now(), data: tiles })
@@ -461,25 +465,27 @@ async function saveProgress(id: string | null, tiles: ArrayBuffer, count: number
 }
 
 /** Exports collected tiles, only when more were collected since the last export. */
-function requestSave(): void {
+function requestSave() {
   if (!last?.meta || last.done || last.kept <= exportedKept) return
   exportedKept = last.kept
-  send({ type: 'export', id: ++seq })
+  send({ type: 'export' })
 }
 setInterval(requestSave, 5000)
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') requestSave()
   else if (scanning && (!wakeLock || wakeLock.released)) void keepAwake() // the lock is dropped while hidden
 })
-if (store.available) void store.evict().catch(() => {})
+store.evict().catch(() => {})
 
 // --- reset ------------------------------------------------------------------------------
 
-function reset(): void {
+function reset() {
   resetGen++
   const id = last?.meta?.id
-  if (id && store.available) void store.remove(id).catch(() => {})
-  if (id) resumeChecked.add(id) // a reset means start over: do not re-import it
+  if (id) {
+    store.remove(id).catch(() => {})
+    resumeChecked.add(id) // a reset means start over: do not re-import it
+  }
   send({ type: 'reset' })
   last = null
   frames = []
@@ -500,8 +506,8 @@ function reset(): void {
 }
 
 startBtn.addEventListener('click', () => (scanning ? (stopCamera(), queueRender()) : void startCamera()))
-resetBtn.addEventListener('click', reset)
-downloadBtn.addEventListener('click', saveFile)
+$('reset').addEventListener('click', reset)
+$('download').addEventListener('click', saveFile)
 shareBtn.addEventListener('click', () => void shareFile())
 setInterval(queueRender, 500)
 render()

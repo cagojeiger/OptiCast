@@ -69,21 +69,7 @@ export function cameraView(src: GrayImage, opts: CameraOptions): GrayImage {
   return { width, height, data }
 }
 
-/** 2× area downscale, standing in for the receiver's drawImage from a 1920-wide camera to its 960 scan size. */
-export function downscale2x(img: GrayImage): GrayImage {
-  const width = img.width >> 1
-  const height = img.height >> 1
-  const data = new Uint8Array(width * height)
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const i = 2 * y * img.width + 2 * x
-      data[y * width + x] = (img.data[i]! + img.data[i + 1]! + img.data[i + img.width]! + img.data[i + img.width + 1]! + 2) >> 2
-    }
-  }
-  return { width, height, data }
-}
-
-/** Gray → RGBA, the layout jsQR and canvas ImageData use. */
+/** Gray → RGBA, the layout of canvas ImageData. */
 export function toRgba(img: GrayImage): Uint8ClampedArray {
   const rgba = new Uint8ClampedArray(img.width * img.height * 4)
   for (let i = 0; i < img.data.length; i++) {
