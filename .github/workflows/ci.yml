@@ -15,8 +15,9 @@ on:
 permissions:
   contents: read
 
-# One run per branch at a time, in push order: a slower older run can never deploy over a
-# newer one. A new push to a pull request cancels its running checks.
+# One run per branch at a time, in push order, so pushes deploy in the order they were made
+# (re-running an old run deploys that old commit again). A new push to a pull request
+# cancels its running checks.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -29,7 +30,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-          components: rustfmt
+          components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
@@ -38,6 +39,7 @@ jobs:
           cache: pnpm
 
       - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --release --locked -- -D warnings
       - run: cargo test --workspace --release --locked
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
