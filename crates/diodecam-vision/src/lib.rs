@@ -1,4 +1,4 @@
-//! DiodeCam receiver vision (`docs/web.md` §6): finds the module grid
+//! DiodeCam receiver vision (`docs/web.md` §7): finds the module grid
 //! of a frame (spec §2) in a grayscale camera image and samples
 //! it into an [`diodecam_core::ModuleGrid`].
 //!
@@ -66,6 +66,18 @@ pub enum Stage {
     Geometry,
     /// A grid was sampled.
     Done,
+}
+
+impl Stage {
+    pub fn name(self) -> &'static str {
+        match self {
+            Stage::Finders => "finders",
+            Stage::Timing => "timing",
+            Stage::Format => "format",
+            Stage::Geometry => "geometry",
+            Stage::Done => "done",
+        }
+    }
 }
 
 /// A grid found in one camera frame.

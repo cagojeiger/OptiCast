@@ -1,16 +1,21 @@
 // @ts-check
-// Resume support (docs/web.md): the collected tiles of an unfinished
+// Resume support (docs/web.md §4): the collected tiles of an unfinished
 // transfer are kept in IndexedDB under its transfer ID, in this browser only.
 //
 // Two object stores: `meta` (small records, read for eviction) and `tiles` (the
 // export bytes). Entries older than 7 days, or beyond 128 MiB in total (oldest
 // first), are evicted; a corrupt entry is deleted when it is loaded.
+// A third, `files`, holds the last verified file until it is shared, replaced or
+// reset, for a day at most. (Every Pages site of one account shares this origin.)
 
 const DB = 'diodecam-v2'
-const VERSION = 2
+const VERSION = 3
 const META = 'meta'
 const TILES = 'tiles'
+const FILES = 'files'
 const MAX_AGE_MS = 7 * 24 * 3600 * 1000
+/** The received file is kept for a day: it covers a closed tab, not storage. */
+const KEEP_FILE_MS = 24 * 3600 * 1000
 const MAX_TOTAL_BYTES = 128 * 2 ** 20
 const TILE_BYTES = 108
 
@@ -22,6 +27,15 @@ const TILE_BYTES = 108
  * @property {number} savedAt
  * @property {number} tiles Tiles in the export.
  * @property {number} bytes
+ */
+
+/**
+ * @typedef {object} KeptFile
+ * @property {string} id Transfer ID.
+ * @property {string} name
+ * @property {number} size
+ * @property {number} receivedAt
+ * @property {Blob} blob
  */
 
 /**
@@ -60,11 +74,14 @@ export function evictable(entries, now, keep) {
 function open() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB, VERSION)
-    req.onupgradeneeded = () => {
+    req.onupgradeneeded = (event) => {
       const db = req.result
-      for (const name of Array.from(db.objectStoreNames)) db.deleteObjectStore(name) // v1 layout
-      db.createObjectStore(META, { keyPath: 'id' })
-      db.createObjectStore(TILES)
+      if (event.oldVersion < 2) {
+        for (const name of Array.from(db.objectStoreNames)) db.deleteObjectStore(name) // v1 layout
+        db.createObjectStore(META, { keyPath: 'id' })
+        db.createObjectStore(TILES)
+      }
+      if (!db.objectStoreNames.contains(FILES)) db.createObjectStore(FILES, { keyPath: 'id' })
     }
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error)
@@ -72,18 +89,21 @@ function open() {
 }
 
 /**
- * Runs `body` in one transaction; resolves with what its returned getter reads once the transaction completes.
+ * Runs `body` in one transaction over `meta` and `tiles` (or `files` alone);
+ * resolves with what its returned getter reads once the transaction completes.
  * @template T
  * @param {IDBTransactionMode} mode
  * @param {(meta: IDBObjectStore, tiles: IDBObjectStore) => () => T} body
+ * @param {string[]} [stores]
  * @returns {Promise<T>}
  */
-async function transaction(mode, body) {
+async function transaction(mode, body, stores = [META, TILES]) {
   const db = await open()
   try {
     return await new Promise((resolve, reject) => {
-      const tx = db.transaction([META, TILES], mode)
-      const result = body(tx.objectStore(META), tx.objectStore(TILES))
+      const tx = db.transaction(stores, mode)
+      const [a, b] = stores.map((name) => tx.objectStore(name))
+      const result = body(/** @type {IDBObjectStore} */ (a), /** @type {IDBObjectStore} */ (b ?? a))
       tx.oncomplete = () => resolve(result())
       tx.onerror = () => reject(tx.error)
       tx.onabort = () => reject(tx.error)
@@ -166,4 +186,64 @@ export async function evict(keep = null) {
     }
     return () => undefined
   })
+}
+
+// --- the received file --------------------------------------------------------
+
+/**
+ * Keeps a verified file until the next one replaces it or `dropFile` (one at most),
+ * so closing the tab before saving does not lose it.
+ * @param {KeptFile} file
+ */
+export async function keepFile(file) {
+  await transaction(
+    'readwrite',
+    (files) => {
+      files.clear()
+      files.put(file)
+      return () => undefined
+    },
+    [FILES],
+  )
+}
+
+/**
+ * The kept file; one older than a day, or whose stored bytes are gone, is dropped instead.
+ * @param {number} [now]
+ * @returns {Promise<KeptFile | undefined>}
+ */
+export async function keptFile(now = Date.now()) {
+  const all = await transaction(
+    'readonly',
+    (files) => {
+      const req = files.getAll()
+      return () => /** @type {KeptFile[]} */ (req.result)
+    },
+    [FILES],
+  )
+  const file = all.sort((a, b) => b.receivedAt - a.receivedAt)[0]
+  if (file && now - file.receivedAt <= KEEP_FILE_MS && file.blob instanceof Blob && (await readable(file.blob))) return file
+  if (all.length) await dropFile()
+  return undefined
+}
+
+/** @param {Blob} blob */
+async function readable(blob) {
+  try {
+    await blob.slice(0, 1).arrayBuffer()
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function dropFile() {
+  await transaction(
+    'readwrite',
+    (files) => {
+      files.clear()
+      return () => undefined
+    },
+    [FILES],
+  )
 }

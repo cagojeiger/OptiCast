@@ -8,7 +8,10 @@
   --accent: #3ddc97;
   --warn: #f5a524;
   --bad: #f2555a;
+  --gutter: 16px;
   font-family: system-ui, -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
 }
 
 * {
@@ -26,17 +29,25 @@ body {
   color: var(--text);
 }
 
+/* Portrait (and desktop): one column, the camera button in a bar at the bottom,
+   where the thumb is. Landscape phones: camera left, everything else right. */
 main {
   max-width: 640px;
   margin: 0 auto;
-  padding: max(16px, env(safe-area-inset-top)) 16px max(32px, env(safe-area-inset-bottom));
+  padding: max(12px, env(safe-area-inset-top)) max(var(--gutter), env(safe-area-inset-right)) 0
+    max(var(--gutter), env(safe-area-inset-left));
   display: grid;
   gap: 12px;
+  grid-template-areas: 'header' 'viewer' 'panel';
+}
+
+header {
+  grid-area: header;
 }
 
 h1 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: 1.15rem;
 }
 
 h1 span {
@@ -64,26 +75,56 @@ h1 span {
   color: var(--bad);
 }
 
+/* Video and overlay share one box and both keep their aspect (`contain`): the
+   overlay is drawn in the decoder's pixels, which have the video's aspect. */
 .viewer {
+  grid-area: viewer;
   position: relative;
   background: #000;
   border-radius: 12px;
   overflow: hidden;
-  min-height: 180px;
+  height: min(22dvh, 50vw);
+  min-height: 120px;
+  transition: height 0.2s;
 }
 
-.viewer video {
-  display: block;
-  width: 100%;
-  height: auto;
+/* Full size only while the camera runs; idle, the result and buttons come first. */
+.viewer.live {
+  height: min(46dvh, 100vw);
 }
 
+.viewer video,
 .viewer canvas {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+  object-fit: contain;
+}
+
+.viewer canvas {
   pointer-events: none;
+}
+
+.panel {
+  grid-area: panel;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.bar {
+  position: sticky;
+  bottom: 0;
+  padding: 12px 0 max(16px, env(safe-area-inset-bottom));
+  background: linear-gradient(to bottom, transparent, var(--bg) 35%);
+}
+
+.bar button {
+  width: 100%;
+  min-height: 56px;
+  font-size: 1.1rem;
+  border-radius: 14px;
 }
 
 .controls {
@@ -92,16 +133,27 @@ h1 span {
   gap: 8px;
 }
 
-button {
+.controls button {
+  flex: 1 1 auto;
+}
+
+button,
+select {
   appearance: none;
   border: 1px solid var(--line);
   background: var(--panel);
   color: var(--text);
   font: inherit;
-  font-size: 0.95rem;
+  font-size: 1rem;
+  min-height: 48px;
   padding: 10px 14px;
   border-radius: 10px;
   cursor: pointer;
+  touch-action: manipulation;
+}
+
+select {
+  appearance: auto;
 }
 
 button.primary {
@@ -111,7 +163,16 @@ button.primary {
   font-weight: 600;
 }
 
-button:disabled {
+button.quiet {
+  min-height: 36px;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  background: transparent;
+}
+
+button:disabled,
+select:disabled {
   opacity: 0.5;
   cursor: default;
 }
@@ -125,10 +186,19 @@ button:disabled {
   gap: 8px;
 }
 
+.file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .file {
   margin: 0;
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  min-width: 0;
   overflow-wrap: anywhere;
 }
 
@@ -163,6 +233,22 @@ progress {
   color: var(--accent);
 }
 
+summary {
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  min-height: 28px;
+  font-weight: 600;
+}
+
+#summary {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
 dl {
   margin: 0;
   display: grid;
@@ -187,6 +273,18 @@ dd {
   overflow-wrap: anywhere;
 }
 
+.field {
+  display: grid;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.field select {
+  width: 100%;
+  color: var(--text);
+}
+
 .note {
   margin: 0;
   color: var(--muted);
@@ -200,10 +298,6 @@ dd {
   overflow-wrap: anywhere;
 }
 
-.result[data-tone='bad'] p {
-  color: var(--bad);
-}
-
 #debug {
   margin: 0;
   padding: 8px;
@@ -212,4 +306,32 @@ dd {
   font-size: 0.7rem;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+@media (orientation: landscape) and (max-height: 540px) {
+  main {
+    max-width: none;
+    height: 100dvh;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 38%);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas: 'viewer header' 'viewer panel';
+    row-gap: 8px;
+  }
+
+  .viewer,
+  .viewer.live {
+    height: auto;
+    min-height: 0;
+    margin-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  .panel {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  #status {
+    font-size: 0.85rem;
+  }
 }

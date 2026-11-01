@@ -235,7 +235,11 @@ try {
   await download.saveAs(savedPath)
   const received = new Uint8Array(readFileSync(savedPath))
   const identical = received.length === original.length && Buffer.from(received).equals(Buffer.from(original))
-  const ok = identical && errors === 0
+  // The verified file stays until the next one or a reset: a reload offers it again.
+  await page.reload()
+  const kept = await page.getByTestId('result').getByText('에 받음').waitFor({ timeout: 10_000 }).then(() => true, () => false)
+  console.log(`reload   kept file offered again: ${kept}`)
+  const ok = identical && kept && errors === 0
   const overall = stats.totals?.tiles ? stats.totals.tiles_ok / stats.totals.tiles : 0
   const avgMs = samples.length ? samples.reduce((a, s) => a + s.ms, 0) / samples.length : 0
   const avgRecognition = samples.length ? samples.reduce((a, s) => a + s.recognition, 0) / samples.length : 0
@@ -247,6 +251,7 @@ try {
     recognition: overall,
     recognitionShown: avgRecognition / 100,
     decodeMs: avgMs,
+    kept,
     framesProcessed: stats.totals?.frames,
     detections: stats.totals?.detections,
     symbols: stats.symbols,

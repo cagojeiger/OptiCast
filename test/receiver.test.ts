@@ -11,12 +11,14 @@ import { join, resolve } from 'node:path'
 import { describe, it } from 'node:test'
 import { cameraView, framing, toRgba } from '../tools/sim/camera.ts'
 import { VTerm } from '../tools/sim/vterm.ts'
-import { eta, formatBytes, fps, hint, limitMib, recognition, safeName, scanWidth, symbolRate, tooLargeText, trim, type FrameSample } from '../web/metrics.js'
+import { MIN_MODULE_PX, eta, failure, formatBytes, fps, hint, limitMib, moduleSize, quantile, recognition, safeName, scanWidth, symbolRate, tooLargeText, trim, type FrameSample, type Stage } from '../web/metrics.js'
 import { evictable, exportTiles, type SavedMeta } from '../web/store.js'
 import { OUT_OF_MEMORY, WasmReceiver } from '../web/wasm.js'
 import { randomBytes } from './helpers.ts'
 
 const frame = (t: number, tilesOk: number, tiles = 10, grid = true): FrameSample => ({ t, grid, tilesOk, tiles })
+const miss = (t: number, stage: Stage): FrameSample => ({ t, grid: false, tilesOk: 0, tiles: 0, stage })
+const sized = (t: number, tilesOk: number, module: number): FrameSample => ({ ...frame(t, tilesOk), stage: 'done', module })
 const close = (actual: number | null, expected: number, within: number) => assert.ok(actual !== null && Math.abs(actual - expected) < within, `${actual} ≉ ${expected}`)
 
 describe('metrics', () => {
@@ -40,6 +42,39 @@ describe('metrics', () => {
     assert.equal(hint([frame(0, 6), frame(1, 7)]), 'slower')
     assert.equal(hint([frame(0, 0, 0, false), frame(1, 0, 0, false)]), 'aim')
     assert.equal(hint([]), null)
+  })
+
+  it('names the stage most frames without a grid stopped at', () => {
+    assert.deepEqual(failure([miss(0, 'timing'), miss(1, 'timing'), miss(2, 'finders'), frame(3, 9)]), { stage: 'timing', share: 0.5 })
+    assert.equal(failure([frame(0, 9), frame(1, 9)]), null)
+    assert.equal(failure([frame(0, 0, 0, false)]), null) // no stage reported
+  })
+
+  it('hints follow the failing stage, then module size', () => {
+    assert.equal(hint([miss(0, 'finders'), miss(1, 'finders'), frame(2, 9)]), 'aim')
+    assert.equal(hint([miss(0, 'format'), miss(1, 'timing'), miss(2, 'timing')]), 'focus')
+    assert.equal(hint([miss(0, 'geometry'), miss(1, 'geometry')]), 'straight')
+    // Small modules: come closer, or turn a portrait camera sideways.
+    const small = [sized(0, 5, 3.2), sized(1, 6, 3.4), sized(2, 5, 3.3)]
+    assert.equal(hint(small), 'closer')
+    assert.equal(hint(small, true), 'rotate')
+    assert.equal(hint([sized(0, 5, 7), sized(1, 6, 7)]), 'slower')
+    assert.equal(hint([sized(0, 10, 3.0), sized(1, 10, 3.0)]), 'faster') // small but reading fine
+    assert.equal(hint([sized(0, 0, 3.5), miss(1, 'timing'), miss(2, 'timing')]), 'closer')
+  })
+
+  it('module size is the shorter pitch across or down', () => {
+    // A 100×50 grid, 400×300 px, tilted corners averaged: 4 px across, 6 px down.
+    close(moduleSize([10, 10, 410, 10, 410, 310, 10, 310], { w: 100, h: 50 }), 4, 1e-9)
+    assert.equal(moduleSize(null, { w: 1, h: 1 }), null)
+    assert.equal(moduleSize([0, 0, null, 0, 1, 1, 0, 1], { w: 1, h: 1 }), null)
+    assert.ok(MIN_MODULE_PX > 4 && MIN_MODULE_PX < 5)
+  })
+
+  it('quantiles by nearest rank, ignoring missing values', () => {
+    assert.equal(quantile([3, null, 1, 2], 0.5), 2)
+    assert.equal(quantile([5, 1, 4, 2, 3], 0.9), 5)
+    assert.equal(quantile([undefined], 0.5), null)
   })
 
   it('ETA uses the recent symbol rate', () => {
@@ -190,6 +225,9 @@ describe('wasm receiver', { skip }, () => {
       assert.equal(header.width, 119)
 
       const rx = await WasmReceiver.create(readFileSync(WASM))
+      assert.equal(rx.stats().stage, null)
+      assert.equal(rx.process(new Uint8Array(320 * 240 * 4), 320, 240), -1)
+      assert.equal(rx.stats().stage, 'finders') // the stage a frame without a grid stopped at
       const vt = new VTerm({ cols: 120, rows: 40 })
       const camera = { width: 1280, height: 720 }
       let previous: ReturnType<VTerm['rasterize']> | null = null
@@ -211,6 +249,9 @@ describe('wasm receiver', { skip }, () => {
         const stats = rx.stats()
         assert.ok(ok >= 0, `frame ${i}: ${ok}`)
         assert.deepEqual(stats.grid, { w: 119, h: 76, profile: 'ssh' })
+        assert.equal(stats.stage, 'done')
+        const module = moduleSize(stats.corners, stats.grid)
+        assert.ok(module !== null && module > 7 && module < 10, `module ${module} px`) // 0.85 × 1280 px over 119 modules, tilted
         passed += ok
         if (stats.done) {
           assert.equal(stats.meta?.name, 'data.bin')
