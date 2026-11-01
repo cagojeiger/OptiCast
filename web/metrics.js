@@ -2,12 +2,16 @@
 // Rolling numbers for the receiver screen (docs/web.md). Pure functions of
 // timestamped samples, so they are unit-tested without a browser.
 
+/** @typedef {'finders' | 'timing' | 'format' | 'geometry' | 'done'} Stage How far the vision got on a frame. */
+
 /**
  * @typedef {object} FrameSample
  * @property {number} t ms (performance.now) when the camera frame was captured.
  * @property {boolean} grid A grid was found in it.
  * @property {number} tilesOk
  * @property {number} tiles
+ * @property {Stage | null} [stage]
+ * @property {number | null} [module] Pixels per module in the decoder's image (see moduleSize).
  */
 
 /**
@@ -16,7 +20,13 @@
  * @property {number} have Distinct symbols collected so far.
  */
 
-/** @typedef {'faster' | 'slower' | 'aim'} Hint */
+/** @typedef {'faster' | 'slower' | 'aim' | 'focus' | 'straight' | 'closer' | 'rotate'} Hint */
+
+/**
+ * Below this many pixels per module tiles start to fail once the image is a
+ * little soft (simulated: 100 % from 4.3 px sharp and 4.7 px with a 3 px blur).
+ */
+export const MIN_MODULE_PX = 4.5
 
 /**
  * Keeps samples no older than `windowMs` before the newest one.
@@ -70,16 +80,68 @@ export function eta(have, need, rate) {
 }
 
 /**
- * The advice line: recognition ≥ 90 % → the sender may go faster; < 70 % → slower; no grid → aim.
+ * Pixels per module of a detected grid: the shorter of the mean pitch across
+ * and down (corners tl, tr, br, bl as x, y pairs, in the decoder's image).
+ * @param {(number | null)[] | null | undefined} corners
+ * @param {{ w: number, h: number } | null | undefined} grid
+ */
+export function moduleSize(corners, grid) {
+  if (!corners || !grid || corners.length < 8) return null
+  const c = corners.map((v) => v ?? NaN)
+  /** @param {number} a @param {number} b */
+  const d = (a, b) => Math.hypot((c[2 * b] ?? NaN) - (c[2 * a] ?? NaN), (c[2 * b + 1] ?? NaN) - (c[2 * a + 1] ?? NaN))
+  const size = Math.min((d(0, 1) + d(3, 2)) / 2 / grid.w, (d(0, 3) + d(1, 2)) / 2 / grid.h)
+  return Number.isFinite(size) ? size : null
+}
+
+/**
+ * The stage most frames without a grid stopped at, and the share of all frames it stopped.
  * @param {FrameSample[]} frames
+ * @returns {{ stage: Exclude<Stage, 'done'>, share: number } | null}
+ */
+export function failure(frames) {
+  /** @type {Partial<Record<Stage, number>>} */
+  const counts = {}
+  for (const f of frames) if (!f.grid && f.stage && f.stage !== 'done') counts[f.stage] = (counts[f.stage] ?? 0) + 1
+  /** @type {Exclude<Stage, 'done'> | null} */
+  let top = null
+  for (const stage of /** @type {const} */ (['finders', 'timing', 'format', 'geometry'])) {
+    if ((counts[stage] ?? 0) > (top ? (counts[top] ?? 0) : 0)) top = stage
+  }
+  return top ? { stage: top, share: (counts[top] ?? 0) / frames.length } : null
+}
+
+/**
+ * The `q` quantile (nearest rank) of the finite numbers given; null for none.
+ * @param {(number | null | undefined)[]} values
+ * @param {number} q 0–1
+ */
+export function quantile(values, q) {
+  const v = /** @type {number[]} */ (values.filter((x) => typeof x === 'number' && Number.isFinite(x))).sort((a, b) => a - b)
+  return v.length ? (v[Math.min(v.length - 1, Math.floor(q * v.length))] ?? null) : null
+}
+
+/**
+ * The advice line (docs/web.md §3). Grid in under half the frames: what stopped
+ * them (finders → aim, timing or format → focus, geometry → straight). Otherwise
+ * recognition ≥ 90 % → the sender may go faster; < 70 % → modules under
+ * MIN_MODULE_PX ask to come closer (or to turn a portrait camera sideways), else slower.
+ * @param {FrameSample[]} frames
+ * @param {boolean} [portrait] The camera image is taller than wide.
  * @returns {Hint | null}
  */
-export function hint(frames) {
+export function hint(frames, portrait = false) {
   if (!frames.length) return null
+  const small = () => (quantile(frames.map((f) => f.module), 0.5) ?? Infinity) < MIN_MODULE_PX
+  if (frames.filter((f) => f.grid).length * 2 < frames.length) {
+    const stage = failure(frames)?.stage
+    if (stage === 'timing' || stage === 'format') return small() ? (portrait ? 'rotate' : 'closer') : 'focus'
+    return stage === 'geometry' ? 'straight' : 'aim'
+  }
   const r = recognition(frames)
-  if (r === null || !frames.some((f) => f.grid)) return 'aim'
+  if (r === null) return 'aim'
   if (r >= 0.9) return 'faster'
-  if (r < 0.7) return 'slower'
+  if (r < 0.7) return small() ? (portrait ? 'rotate' : 'closer') : 'slower'
   return null
 }
 
@@ -87,7 +149,19 @@ export function hint(frames) {
 export const HINT_TEXT = {
   faster: '송신 fps를 올려도 됩니다 (+)',
   slower: '송신 fps를 낮추세요(-)',
-  aim: '화면 전체가 들어오게 비추세요',
+  aim: '화면 전체가 들어오게 비추세요 (네 모서리 표식)',
+  focus: '격자가 흐립니다 — 흔들리지 않게, 초점이 맞는 거리에서',
+  straight: '격자가 휘어 보입니다 — 정면에서 조금 떨어져 비추세요',
+  closer: '격자 칸이 작습니다 — 더 가까이 비추거나 터미널 글꼴을 키우세요',
+  rotate: '폰을 가로로 들면 격자 칸이 두 배 가까이 크게 찍힙니다',
+}
+
+/** @type {Record<Exclude<Stage, 'done'>, string>} */
+export const STAGE_TEXT = {
+  finders: '표식',
+  timing: '타이밍 줄',
+  format: '형식 정보',
+  geometry: '기하(왜곡)',
 }
 
 /**

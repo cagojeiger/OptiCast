@@ -7,6 +7,7 @@
  * @typedef {object} ReceiverStats
  * @property {number} frames
  * @property {boolean} detected
+ * @property {'finders' | 'timing' | 'format' | 'geometry' | 'done' | null} stage How far the vision got on this frame.
  * @property {{ w: number, h: number, profile: 'ssh' | 'vt100' } | null} grid
  * @property {(number | null)[] | null} corners Grid corners in scan pixels: tl, tr, br, bl as x, y pairs (null for a non-finite value).
  * @property {(number | null)[]} [finders] Finder centres tl, tr, br, bl.

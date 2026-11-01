@@ -5,8 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0b0d10" />
     <meta name="color-scheme" content="dark" />
+    <meta name="apple-mobile-web-app-title" content="DiodeCam" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>DiodeCam 수신기</title>
-    <link rel="icon" href="data:," />
+    <link rel="manifest" href="./manifest.webmanifest?v=__V__" />
+    <link rel="icon" href="./icon-192.png?v=__V__" />
+    <link rel="apple-touch-icon" href="./icon-180.png?v=__V__" />
     <link rel="stylesheet" href="./style.css?v=__V__" />
   </head>
   <body>
@@ -21,46 +25,66 @@
         <canvas id="overlay" aria-hidden="true"></canvas>
       </section>
 
-      <section class="card" aria-label="진행 상황">
-        <p class="file">
-          <span id="file-name" data-testid="file-name">—</span><span id="file-size"></span><span id="file-id" class="id" data-testid="file-id"></span>
-        </p>
-        <div class="progress-row">
-          <span id="symbols" data-testid="symbols">조각 0 / ?</span>
-          <span id="percent" data-testid="percent">0%</span>
+      <div class="panel">
+        <section class="card" aria-label="진행 상황">
+          <div class="file-row">
+            <p class="file">
+              <span id="file-name" data-testid="file-name">—</span><span id="file-size"></span><span id="file-id" class="id" data-testid="file-id"></span>
+            </p>
+            <button id="reset" class="quiet" data-testid="reset">초기화</button>
+          </div>
+          <div class="progress-row">
+            <span id="symbols" data-testid="symbols">조각 0 / ?</span>
+            <span id="percent" data-testid="percent">0%</span>
+          </div>
+          <progress id="progress" max="1" value="0"></progress>
+          <p id="hint" class="hint" data-testid="hint" hidden></p>
+        </section>
+
+        <section class="card result" id="result" data-testid="result" hidden>
+          <p id="result-text"></p>
+          <div class="controls">
+            <button id="share" class="primary" data-testid="share" hidden>공유 · 파일에 저장</button>
+            <button id="download" data-testid="download">다운로드</button>
+          </div>
+        </section>
+
+        <details class="card" id="details">
+          <summary>측정값 <span id="summary" data-testid="summary"></span></summary>
+          <dl class="stats">
+            <div><dt>촬영</dt><dd id="stat-capture" data-testid="capture-fps">—</dd></div>
+            <div><dt>처리</dt><dd id="stat-process" data-testid="process-fps">—</dd></div>
+            <div><dt>디코드</dt><dd id="stat-ms" data-testid="decode-ms">—</dd></div>
+            <div><dt>타일 인식</dt><dd id="stat-recognition" data-testid="recognition">—</dd></div>
+            <div><dt>격자</dt><dd id="stat-grid" data-testid="grid">—</dd></div>
+            <div><dt>모듈 크기</dt><dd id="stat-module" data-testid="module">—</dd></div>
+            <div><dt>실패 단계</dt><dd id="stat-stage" data-testid="stage">—</dd></div>
+            <div><dt>남은 시간</dt><dd id="stat-eta" data-testid="eta">—</dd></div>
+            <div><dt>카메라</dt><dd id="stat-camera" data-testid="camera">—</dd></div>
+            <div><dt>렌즈</dt><dd id="stat-lens" data-testid="lens">—</dd></div>
+            <div><dt>다른 전송</dt><dd id="stat-foreign" data-testid="foreign">0</dd></div>
+          </dl>
+          <label class="field">
+            <span>카메라 선택</span>
+            <select id="camera-select" data-testid="camera-select" disabled>
+              <option value="">자동 (후면 기본)</option>
+            </select>
+          </label>
+          <div class="controls">
+            <button id="copy" data-testid="copy">진단 복사</button>
+          </div>
+          <p class="note">
+            진단에는 기기·카메라 정보와 인식 통계만 담기고 파일 이름과 내용은 담기지 않습니다. 모든 처리는 이 브라우저 안에서만
+            이루어지며 아무것도 업로드하지 않습니다.
+          </p>
+        </details>
+
+        <pre id="debug" data-testid="debug" hidden></pre>
+
+        <div class="bar">
+          <button id="start" class="primary" data-testid="start">카메라 시작</button>
         </div>
-        <progress id="progress" max="1" value="0"></progress>
-        <p id="hint" class="hint" data-testid="hint" hidden></p>
-      </section>
-
-      <section class="controls">
-        <button id="start" class="primary" data-testid="start">카메라 시작</button>
-        <button id="reset" data-testid="reset">초기화</button>
-      </section>
-
-      <section class="card result" id="result" data-testid="result" hidden>
-        <p id="result-text"></p>
-        <div class="controls">
-          <button id="download" class="primary" data-testid="download">파일 저장</button>
-          <button id="share" data-testid="share" hidden>공유</button>
-        </div>
-      </section>
-
-      <section class="card">
-        <dl class="stats">
-          <div><dt>촬영</dt><dd id="stat-capture" data-testid="capture-fps">—</dd></div>
-          <div><dt>처리</dt><dd id="stat-process" data-testid="process-fps">—</dd></div>
-          <div><dt>디코드</dt><dd id="stat-ms" data-testid="decode-ms">—</dd></div>
-          <div><dt>타일 인식</dt><dd id="stat-recognition" data-testid="recognition">—</dd></div>
-          <div><dt>격자</dt><dd id="stat-grid" data-testid="grid">—</dd></div>
-          <div><dt>카메라</dt><dd id="stat-camera" data-testid="camera">—</dd></div>
-          <div><dt>다른 전송</dt><dd id="stat-foreign" data-testid="foreign">0</dd></div>
-          <div><dt>남은 시간</dt><dd id="stat-eta" data-testid="eta">—</dd></div>
-        </dl>
-        <p class="note">모든 처리는 이 브라우저 안에서만 이루어지며 아무것도 업로드하지 않습니다.</p>
-      </section>
-
-      <pre id="debug" data-testid="debug" hidden></pre>
+      </div>
     </main>
     <script type="module" src="./main.js?v=__V__"></script>
   </body>

@@ -34,7 +34,7 @@ use std::fmt::Write as _;
 use diodecam_core::receiver::DEFAULT_MAX_FILE;
 use diodecam_core::tile::{self, Tile, TileKind, DATA_BYTES};
 use diodecam_core::{frame, Accepted, Assembler, Layout};
-use diodecam_vision::{luma_rgba, Detection, Point, Polarity, Vision};
+use diodecam_vision::{luma_rgba, Detection, Point, Polarity, Stage, Vision};
 
 /// Tiles kept for export at most (~32 MB); beyond that resume is not offered.
 const MAX_KEPT: usize = 300_000;
@@ -67,6 +67,8 @@ pub struct Receiver {
 #[derive(Default)]
 struct FrameStats {
     detection: Option<Detection>,
+    /// How far the vision got (docs/web.md §3: the hint for a frame without a grid).
+    stage: Option<Stage>,
     tiles_ok: usize,
     tiles: usize,
     /// One char per tile position: '1' passed, '0' failed.
@@ -128,7 +130,9 @@ impl Receiver {
         if width.checked_mul(height).is_none_or(|n| gray.len() < n) {
             return -2;
         }
-        let Some(det) = self.vision.process(gray, width, height) else { return -1 };
+        let det = self.vision.process(gray, width, height);
+        self.frame.stage = self.vision.stage();
+        let Some(det) = det else { return -1 };
         self.totals.detections += 1;
         let Ok(layout) = Layout::from_format(det.format) else { return -1 };
         let mut ok = 0;
@@ -148,7 +152,8 @@ impl Receiver {
         }
         self.totals.tiles_ok += ok as u64;
         self.totals.tiles += layout.tiles() as u64;
-        self.frame = FrameStats { detection: Some(det), tiles_ok: ok, tiles: layout.tiles(), status };
+        self.frame =
+            FrameStats { detection: Some(det), stage: self.frame.stage, tiles_ok: ok, tiles: layout.tiles(), status };
         self.finish();
         ok as i32
     }
@@ -258,6 +263,12 @@ impl Receiver {
         let f = &self.frame;
         j.push('{');
         let _ = write!(j, "\"frames\":{},\"detected\":{}", self.totals.frames, f.detection.is_some());
+        match f.stage {
+            Some(stage) => {
+                let _ = write!(j, ",\"stage\":\"{}\"", stage.name());
+            }
+            None => j.push_str(",\"stage\":null"),
+        }
         match &f.detection {
             Some(d) => {
                 let _ = write!(
@@ -587,6 +598,14 @@ mod tests {
     #[test]
     fn json_escaping() {
         assert_eq!(json_string("a\"\\\n\u{2028}"), "\"a\\\"\\\\\\u000a\\u2028\"");
+    }
+
+    #[test]
+    fn stage_of_a_frame_without_a_grid() {
+        let mut rx = Receiver::new();
+        assert_eq!(field(&rx.stats_json(), "stage"), "null");
+        assert_eq!(rx.process_gray(&vec![128; 320 * 240], 320, 240), -1);
+        assert_eq!(field(&rx.stats_json(), "stage"), "\"finders\"");
     }
 
     #[test]
