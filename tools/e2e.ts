@@ -1,6 +1,6 @@
 // End-to-end test of the receiver without a phone.
 //
-// 1. `opticast frames` (the real Rust sender) writes consecutive frames' ANSI
+// 1. `diodecam frames` (the real Rust sender) writes consecutive frames' ANSI
 //    text for a random file, starting mid-stream.
 // 2. Each frame is replayed in the virtual terminal (tools/sim/vterm.ts, `▀` +
 //    SGR 7, 2 px line gap) and filmed by a simulated 30 fps camera watching a
@@ -47,7 +47,7 @@ const { values: args } = parseArgs({
     margin: { type: 'string', default: '1.3' }, // distinct symbols in the clip ÷ (K + 2)
     timeout: { type: 'string', default: '180' },
     scan: { type: 'string' },
-    url: { type: 'string' }, // receiver to test, e.g. https://cagojeiger.github.io/OptiCast/ (default: local build)
+    url: { type: 'string' }, // receiver to test, e.g. https://cagojeiger.github.io/diodecam/ (default: local build)
     'resize-to': { type: 'string' }, // CxR: resize the terminal halfway through the clip
     hold: { type: 'string' }, // keep the browser open S seconds after the result (with --headed)
     'reload-after': { type: 'string' }, // reload the page after S seconds: progress must resume from IndexedDB
@@ -68,8 +68,8 @@ const paintMs = Number(args['paint-ms'])
 const label = `${cols}x${rows}${args['resize-to'] ? `<->${args['resize-to']}` : ''} @${camW}x${camH}`
 
 // --- 1. sender ------------------------------------------------------------------------
-console.log(`build    opticast-cli, opticast-wasm`)
-cargo(['build', '-q', '-p', 'opticast-cli'])
+console.log(`build    diodecam-cli, diodecam-wasm`)
+cargo(['build', '-q', '-p', 'diodecam-cli'])
 const original = randomBytes(Number(args.size), cols * 1000 + rows)
 const inputPath = resolve(OUT, 'random.bin')
 writeFileSync(inputPath, original)
@@ -78,11 +78,11 @@ writeFileSync(inputPath, original)
 const probePath = resolve(OUT, 'probe.jsonl')
 const framesPath = resolve(OUT, 'frames.jsonl')
 const probe = (c: number, r: number) => {
-  cargo(['run', '-q', '-p', 'opticast-cli', '--', 'frames', inputPath, '--cols', `${c}`, '--rows', `${r}`, '--count', '1', '--out', probePath])
+  cargo(['run', '-q', '-p', 'diodecam-cli', '--', 'frames', inputPath, '--cols', `${c}`, '--rows', `${r}`, '--count', '1', '--out', probePath])
   return JSON.parse(readFileSync(probePath, 'utf8').split('\n')[0]!)
 }
 const render = (c: number, r: number, count: number, from: number): string[] => {
-  cargo(['run', '-q', '-p', 'opticast-cli', '--', 'frames', inputPath, '--cols', `${c}`, '--rows', `${r}`, '--count', `${count}`, '--skip', `${from}`, '--out', framesPath])
+  cargo(['run', '-q', '-p', 'diodecam-cli', '--', 'frames', inputPath, '--cols', `${c}`, '--rows', `${r}`, '--count', `${count}`, '--skip', `${from}`, '--out', framesPath])
   return readFileSync(framesPath, 'utf8')
     .trim()
     .split('\n')

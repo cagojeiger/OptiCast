@@ -10,7 +10,7 @@
 
 ## Decision
 
-- **Rust 공유 코어** `opticast-core`(I/O 없음): 배치, 타일, RS, RaptorQ, META, ANSI, 수신 조립. 송신 CLI와 수신 WASM이 같은 코드를 쓴다.
+- **Rust 공유 코어** `diodecam-core`(I/O 없음): 배치, 타일, RS, RaptorQ, META, ANSI, 수신 조립. 송신 CLI와 수신 WASM이 같은 코드를 쓴다.
 - **CLI** 의존성은 `crossterm`(raw 모드와 터미널 크기만, 이벤트 기능 끔)과 `signal-hook`뿐이다. 인자는 직접 파싱하고,
   키 입력은 stdin 스레드, 창 크기 변경은 SIGWINCH로 받는다. stdin이 EOF면 터미널이 사라진 것이므로 끝낸다.
 - **수신기**는 빌드 단계 없는 순수 JS ES 모듈 + Web Worker + WASM(C ABI, wasm-bindgen 없음)이다.

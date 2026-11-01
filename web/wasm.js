@@ -1,5 +1,5 @@
 // @ts-check
-// The receiver's WebAssembly module (crates/opticast-wasm) behind a small class.
+// The receiver's WebAssembly module (crates/diodecam-wasm) behind a small class.
 // Plain C ABI: no generated bindings. Works in a Worker and in Node.
 
 /**

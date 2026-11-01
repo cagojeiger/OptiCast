@@ -95,8 +95,8 @@ function handle(msg) {
 self.onmessage = ({ data }) => handle(data)
 
 async function boot() {
-  const response = await fetch(new URL('./opticast.wasm?v=__V__', import.meta.url))
-  if (!response.ok) throw new Error(`opticast.wasm: HTTP ${response.status}`)
+  const response = await fetch(new URL('./diodecam.wasm?v=__V__', import.meta.url))
+  if (!response.ok) throw new Error(`diodecam.wasm: HTTP ${response.status}`)
   receiver = await WasmReceiver.create(await response.arrayBuffer())
   for (const msg of queue.splice(0)) handle(msg)
 }

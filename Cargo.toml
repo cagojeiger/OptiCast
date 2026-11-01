@@ -1,23 +1,23 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/opticast-core",
-    "crates/opticast-cli",
-    "crates/opticast-vision",
-    "crates/opticast-sim",
-    "crates/opticast-wasm",
+    "crates/diodecam-core",
+    "crates/diodecam-cli",
+    "crates/diodecam-vision",
+    "crates/diodecam-sim",
+    "crates/diodecam-wasm",
 ]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "Apache-2.0"
 rust-version = "1.85"
 
 [workspace.dependencies]
-opticast-core = { path = "crates/opticast-core" }
-opticast-vision = { path = "crates/opticast-vision" }
-opticast-sim = { path = "crates/opticast-sim" }
+diodecam-core = { path = "crates/diodecam-core" }
+diodecam-vision = { path = "crates/diodecam-vision" }
+diodecam-sim = { path = "crates/diodecam-sim" }
 
 # raptorq's solver runs expensive self-checks under debug assertions, which
 # makes debug tests ~300x slower than release. Build dependencies optimized and
@@ -28,10 +28,10 @@ debug-assertions = false
 
 # The vision tests push full camera frames (1920×1080) through the simulator and
 # the detector; unoptimized they take minutes. Debug assertions stay on.
-[profile.dev.package.opticast-vision]
+[profile.dev.package.diodecam-vision]
 opt-level = 3
 
-[profile.dev.package.opticast-sim]
+[profile.dev.package.diodecam-sim]
 opt-level = 3
 
 [profile.release]

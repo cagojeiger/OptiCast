@@ -1,11 +1,11 @@
-# OptiCast 프로토콜 — 규격
+# DiodeCam 프로토콜 — 규격
 
 송신기(Rust CLI)와 수신기(WASM)가 지켜야 할 비트 단위 규격이다. 결정의 이유는 [`adr/`](adr/README.md)에 있다.
 정수는 모두 big-endian이다. "모듈"은 화면 격자의 점 하나이고, 값 1은 터미널 글자색, 0은 바탕색이다.
 
 ## 1. 입력과 조작
 
-- `opticast send <FILE>`은 **일반 파일 하나**만 받는다. 디렉터리, 장치, FIFO는 거부하고, 디렉터리는 `tar czf out.tgz dir/`로
+- `diodecam send <FILE>`은 **일반 파일 하나**만 받는다. 디렉터리, 장치, FIFO는 거부하고, 디렉터리는 `tar czf out.tgz dir/`로
   묶으라고 안내한다. `--max-bytes`(기본 64 MiB)를 넘어도 거부한다.
 - `--fps` 기본 24. 키: `+`/`-` fps(2, 3, 5, 8, 10, 12, 15, 20, 24, 30), space 일시정지, `q`·ESC·Ctrl-C 종료(화면 복원).
   30을 고르면 30fps 카메라와 위상이 고정될 수 있다고 안내한다.
@@ -167,7 +167,7 @@ META 타일의 SBN과 ESI는 0이다.
 ## 7. 상태 줄 (아래 2줄, ASCII만)
 
 ```
- OptiCast  report.pdf 1.00 MB -> 412 KB deflate  id 3f2a9c1e  ssh 199x106  19 tiles 1.73 KB/frame
+ DiodeCam  report.pdf 1.00 MB -> 412 KB deflate  id 3f2a9c1e  ssh 199x106  19 tiles 1.73 KB/frame
  00:41  source 100% [##########]  +repair 13,420  24 fps  41.5 KB/s  phone needs ~10s of view  [+/-] fps [space] pause [q] quit
 ```
 
@@ -188,7 +188,7 @@ META 타일의 SBN과 ESI는 0이다.
 
 ## 9. 수신기 처리 (참고)
 
-규범은 아니고 현재 구현(`crates/opticast-vision`, `web/`)의 순서다.
+규범은 아니고 현재 구현(`crates/diodecam-vision`, `web/`)의 순서다.
 
 1. **휘도**: RGBA → Y = (77R + 150G + 29B) >> 8. 처리 폭은 min(영상 폭, 1920)(`?scan=`).
 2. **이진화**: 적분 영상으로 국소 평균 임계값(창 = 영상 폭 / 40, 최소 15 px). 극성을 모르므로 두 극성 모두 시도한다.
