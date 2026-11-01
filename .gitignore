@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.y4m
+.omc/
+.DS_Store
+target/
+web/wasm/*.wasm
