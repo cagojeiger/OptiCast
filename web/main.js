@@ -715,7 +715,7 @@ function diagnostics() {
   const capture = fps(captureTimes)
   const processed = fps(resultTimes)
   return {
-    app: `DiodeCam ${VERSION}`,
+    app: `DiodeCam __VERSION__ (${VERSION})`,
     at: new Date().toISOString(),
     agent: navigator.userAgent,
     standalone: matchMedia('(display-mode: standalone)').matches,
