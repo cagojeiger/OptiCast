@@ -125,7 +125,7 @@ describe('page', () => {
   it('has one setup section with three steps', () => {
     // A section rewrite once left the old tail behind, doubling the page.
     assert.equal((html.match(/<section id="setup"/g) ?? []).length, 1)
-    assert.equal((html.match(/class="step"/g) ?? []).length, 3)
+    assert.equal((html.match(/class="step"/g) ?? []).length, 4)
     assert.equal((html.match(/class="setup-foot"/g) ?? []).length, 1)
     assert.ok(!html.includes('send report.pdf'), 'commands use <FILE>, not a sample name')
   })
@@ -133,6 +133,7 @@ describe('page', () => {
     // setup.js is a browser module; the rule is small enough to mirror here and keep in sync.
     const src = readFileSync(resolve('web/setup.js'), 'utf8')
     const fn = src.slice(src.indexOf('const fileArg = () => {'), src.indexOf('/** @param {string} target */'))
+    // fileArg is self-contained apart from `fileInput`
     const fileArg = new Function('fileInput', `${fn} return fileArg()`) as (i: { value: string }) => string
     assert.equal(fileArg({ value: '' }), '<FILE>')
     assert.equal(fileArg({ value: 'report.pdf' }), 'report.pdf')

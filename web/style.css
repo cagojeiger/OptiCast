@@ -799,7 +799,7 @@ html[data-view='receiver'] #setup {
   grid-area: grid;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(0, 1fr) 320px;
   gap: 16px;
   align-items: stretch;
 }
@@ -810,12 +810,21 @@ html[data-view='receiver'] #setup {
   overflow: auto;
 }
 
-.card.run {
-  justify-content: space-evenly;
+.setup-col {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 16px;
 }
 
-.card.phone {
-  justify-content: center;
+.card.open {
+  align-items: center;
+  text-align: center;
+}
+
+.card.open h2 {
+  align-self: flex-start;
+  text-align: left;
 }
 
 .setup .card {

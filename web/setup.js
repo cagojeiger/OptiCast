@@ -30,7 +30,8 @@
       const el = document.getElementById(id)
       if (el) el.textContent = text
     }
-    set('cmd-run', `curl -fsSL ${base} | tar xz\n./diodecam-${target}/diodecam send ${fileArg()}`)
+    set('cmd-curl', `curl -fsSL ${base} | tar xz`)
+    set('cmd-run', `./diodecam-${target}/diodecam send ${fileArg()}`)
     set('cmd-fetch', `curl -fsSLO ${base}\ncurl -fsSLO ${base}.sha256`)
     set('cmd-verify', `sha256sum -c diodecam-${target}.tar.gz.sha256\ntar xzf diodecam-${target}.tar.gz`)
     const macTarget = target.endsWith('apple-darwin') ? target : 'aarch64-apple-darwin'

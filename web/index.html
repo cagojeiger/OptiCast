@@ -139,31 +139,42 @@
       </header>
 
       <div class="setup-grid">
-        <section class="card run">
-          <h2><span class="step">1</span>Run on the server</h2>
-          <div class="targets" role="group" aria-label="Where the sender runs">
-            <button type="button" data-target="x86_64-unknown-linux-musl" aria-pressed="true">Linux x86_64</button>
-            <button type="button" data-target="aarch64-unknown-linux-musl" aria-pressed="false">Linux arm64</button>
-            <button type="button" data-target="aarch64-apple-darwin" aria-pressed="false">macOS (Apple silicon)</button>
-            <button type="button" data-target="x86_64-apple-darwin" aria-pressed="false">macOS (Intel)</button>
-          </div>
-          <label class="file-field"><span>File to send</span><input id="file-input" type="text" placeholder="e.g. report.pdf" autocomplete="off" spellcheck="false" /></label>
-          <div class="code"><pre id="cmd-run">curl -fsSL https://github.com/cagojeiger/diodecam/releases/latest/download/diodecam-x86_64-unknown-linux-musl.tar.gz | tar xz
-./diodecam-x86_64-unknown-linux-musl/diodecam send &lt;FILE&gt;</pre><button type="button" class="copy" data-copy="cmd-run">Copy</button></div>
-          <p class="muted">Paste in the terminal on the server. Type the file's path above and the command fills in. Folders: <code>tar czf docs.tgz docs/</code> first.</p>
-        </section>
+        <div class="setup-col">
+          <section class="card download">
+            <h2><span class="step">1</span>Download</h2>
+            <div class="targets" role="group" aria-label="Where the sender runs">
+              <button type="button" data-target="x86_64-unknown-linux-musl" aria-pressed="true">Linux x86_64</button>
+              <button type="button" data-target="aarch64-unknown-linux-musl" aria-pressed="false">Linux arm64</button>
+              <button type="button" data-target="aarch64-apple-darwin" aria-pressed="false">macOS (Apple silicon)</button>
+              <button type="button" data-target="x86_64-apple-darwin" aria-pressed="false">macOS (Intel)</button>
+            </div>
+            <div class="code"><pre id="cmd-curl">curl -fsSL https://github.com/cagojeiger/diodecam/releases/latest/download/diodecam-x86_64-unknown-linux-musl.tar.gz | tar xz</pre><button type="button" class="copy" data-copy="cmd-curl">Copy</button></div>
+            <p class="muted">Paste in a terminal on the machine that has the file. One folder, one binary, nothing installed.</p>
+          </section>
+          <section class="card send">
+            <h2><span class="step">2</span>Send</h2>
+            <label class="file-field"><span>File to send</span><input id="file-input" type="text" placeholder="e.g. report.pdf" autocomplete="off" spellcheck="false" /></label>
+            <div class="code"><pre id="cmd-run">./diodecam-x86_64-unknown-linux-musl/diodecam send &lt;FILE&gt;</pre><button type="button" class="copy" data-copy="cmd-run">Copy</button></div>
+            <p class="muted">The terminal becomes the grid until you press <code>q</code>. Keys: <code>+</code> / <code>-</code> fps · <code>space</code> pause. Folders: <code>tar czf docs.tgz docs/</code> first. A larger window is faster.</p>
+          </section>
+        </div>
 
-        <section class="card phone">
-          <h2><span class="step">2</span>Scan with your phone</h2>
-          <img class="qr" src="./qr.svg?v=__V__" width="200" height="200" alt="QR code for the receiver address" />
-          <h2><span class="step">3</span>Point the phone at the terminal</h2>
-          <p>Tap <b>Start</b> and frame the whole screen; sideways reads better.</p>
-          <p>When it says <b>✓ Received</b>, tap <b>Share · Save</b>, then press <code>q</code> on the server.</p>
-        </section>
+        <div class="setup-col">
+          <section class="card open">
+            <h2><span class="step">3</span>Open the receiver</h2>
+            <img class="qr" src="./qr.svg?v=__V__" width="200" height="200" alt="QR code for the receiver address" />
+            <p class="muted">Scan with the phone camera. Safari: Share → Add to Home Screen, and it works offline.</p>
+          </section>
+          <section class="card receive">
+            <h2><span class="step">4</span>Receive</h2>
+            <p>Tap <b>Start</b> and frame the whole terminal; sideways reads better.</p>
+            <p>When it says <b>✓ Received</b>, tap <b>Share · Save</b>, then press <code>q</code> on the server.</p>
+          </section>
+        </div>
       </div>
 
       <details class="fold">
-        <summary>More: air-gapped import · macOS quarantine · keys · folders · offline</summary>
+        <summary>More: air-gapped import · macOS quarantine · storage</summary>
         <div class="fold-body">
           <h3>Air-gapped server</h3>
           <p>Fetch the archive and its checksum where there is internet, move both through your organisation's approved import path, then verify and unpack on the server.</p>
@@ -175,9 +186,9 @@ tar xzf diodecam-x86_64-unknown-linux-musl.tar.gz</pre><button type="button" cla
           <p>Browser downloads carry a quarantine mark and macOS refuses an unsigned binary; <code>curl</code> adds no mark. Remove it once:</p>
           <div class="code"><pre id="cmd-xattr">xattr -d com.apple.quarantine ./diodecam-aarch64-apple-darwin/diodecam</pre><button type="button" class="copy" data-copy="cmd-xattr">Copy</button></div>
           <h3>While sending</h3>
-          <p>Keys: <code>+</code> / <code>-</code> fps · <code>space</code> pause · <code>q</code> quit. A larger window is faster (200×55: 1 MiB in about 26 s); resizing mid-transfer is fine. Over 64 MiB: <code>--max-bytes</code>. <code>diodecam -V</code> prints the version.</p>
+          <p>At 200×55, 1 MiB takes about 26 s; resizing mid-transfer is fine. Over 64 MiB: <code>--max-bytes</code>. <code>diodecam -V</code> prints the version, <code>-h</code> the options.</p>
           <h3>On the phone</h3>
-          <p>Safari: Share → Add to Home Screen, and the receiver works offline. It uploads nothing and never opens the file; it is saved only when you tap Share or Download. A closed tab keeps the progress for 7 days and the received file until it is shared or replaced, a day at most. <a href="./?receiver=1">Open the receiver on this computer ›</a></p>
+          <p>The receiver uploads nothing and never opens the file; it is saved only when you tap Share or Download. A closed tab keeps the progress for 7 days and the received file until it is shared or replaced, a day at most. <a href="./?receiver=1">Open the receiver on this computer ›</a></p>
         </div>
       </details>
 
