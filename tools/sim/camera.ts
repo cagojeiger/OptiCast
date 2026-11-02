@@ -69,6 +69,15 @@ export function cameraView(src: GrayImage, opts: CameraOptions): GrayImage {
   return { width, height, data }
 }
 
+/** A capture made while the terminal repaints: rows above `boundary` from the newer frame (diodecam_sim::tear). */
+export function tear(newer: GrayImage, older: GrayImage, boundary: number): GrayImage {
+  if (newer.width !== older.width || newer.height !== older.height) throw new Error('tear: frames differ in size')
+  const data = older.data.slice()
+  const rows = Math.max(0, Math.min(Math.floor(boundary), newer.height)) // whole rows, like the Rust usize
+  data.set(newer.data.subarray(0, rows * newer.width))
+  return { width: newer.width, height: newer.height, data }
+}
+
 /** Gray → RGBA, the layout of canvas ImageData. */
 export function toRgba(img: GrayImage): Uint8ClampedArray {
   const rgba = new Uint8ClampedArray(img.width * img.height * 4)

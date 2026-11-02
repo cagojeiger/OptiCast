@@ -5,16 +5,15 @@
 
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, it } from 'node:test'
-import { cameraView, framing, toRgba } from '../tools/sim/camera.ts'
+import { cameraView, framing, tear, toRgba } from '../tools/sim/camera.ts'
+import { randomBytes, senderFrames } from '../tools/sim/sender.ts'
 import { VTerm } from '../tools/sim/vterm.ts'
 import { MIN_MODULE_PX, captureWidth, eta, failure, formatBytes, formatSeconds, fps, hint, limitMib, moduleSize, quantile, recognition, safeName, scanWidth, symbolRate, tooLargeText, trim, type FrameSample, type Stage } from '../web/metrics.js'
 import { evictable, exportTiles, keepable, shouldSave, type KeptFile, type SavedMeta } from '../web/store.js'
 import { OUT_OF_MEMORY, WasmReceiver } from '../web/wasm.js'
-import { randomBytes } from './helpers.ts'
 
 const frame = (t: number, tilesOk: number, tiles = 10, grid = true): FrameSample => ({ t, grid, tilesOk, tiles })
 const miss = (t: number, stage: Stage): FrameSample => ({ t, grid: false, tilesOk: 0, tiles: 0, stage })
@@ -335,60 +334,52 @@ const skip = process.env.CI ? false : !existsSync(WASM) ? 'web/diodecam.wasm mis
 
 describe('wasm receiver', { skip }, () => {
   it('restores a file from simulated camera frames, ignoring torn ones', { timeout: 60_000 }, async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'diodecam-'))
-    try {
-      const original = randomBytes(6000, 21)
-      writeFileSync(join(dir, 'data.bin'), original)
-      const out = join(dir, 'frames.jsonl')
-      const run = spawnSync(BIN!, ['frames', join(dir, 'data.bin'), '--cols', '120', '--rows', '40', '--count', '16', '--skip', '3', '--out', out])
-      assert.equal(run.status, 0, run.stderr.toString())
-      const [header, ...lines] = readFileSync(out, 'utf8')
-        .trim()
-        .split('\n')
-        .map((l) => JSON.parse(l))
-      assert.equal(header.width, 119)
+    const original = randomBytes(6000, 21)
+    const { header, frames } = senderFrames({ bytes: original, name: 'data.bin', cols: 120, rows: 40, count: 16, skip: 3 }, BIN!)
+    assert.equal(header.width, 119)
 
-      const rx = await WasmReceiver.create(readFileSync(WASM))
-      assert.equal(rx.stats().stage, null)
-      assert.equal(rx.process(new Uint8Array(320 * 240 * 4), 320, 240), -1)
-      assert.equal(rx.stats().stage, 'finders') // the stage a frame without a grid stopped at
-      const vt = new VTerm({ cols: 120, rows: 40 })
-      const camera = { width: 1280, height: 720 }
-      let previous: ReturnType<VTerm['rasterize']> | null = null
-      let file: Uint8Array | null = null
-      let passed = 0
-      for (const [i, line] of lines.entries()) {
-        vt.write(line.ansi)
-        const screen = vt.rasterize({ lineGap: 2 })
-        const corners = framing(camera.width, camera.height, screen.width / screen.height, 0.85, 0.04)
-        // Every third capture is torn: the top half already shows the next frame.
-        let shown = screen
-        if (previous && i % 3 === 0) {
-          shown = { ...previous, data: previous.data.slice() }
-          shown.data.set(screen.data.subarray(0, (screen.height >> 1) * screen.width))
-        }
-        previous = screen
-        const shot = cameraView(shown, { ...camera, corners, blur: 1, noise: 6, levels: [30, 220], seed: i + 1 })
-        const ok = rx.process(toRgba(shot), shot.width, shot.height)
-        const stats = rx.stats()
-        assert.ok(ok >= 0, `frame ${i}: ${ok}`)
-        assert.deepEqual(stats.grid, { w: 119, h: 76, profile: 'ssh' })
-        assert.equal(stats.stage, 'done')
-        const module = moduleSize(stats.corners, stats.grid)
-        assert.ok(module !== null && module > 7 && module < 10, `module ${module} px`) // 0.85 × 1280 px over 119 modules, tilted
-        passed += ok
-        if (stats.done) {
-          assert.equal(stats.meta?.name, 'data.bin')
-          assert.equal(stats.meta?.size, original.length)
-          file = rx.file()
-          break
-        }
+    const rx = await WasmReceiver.create(readFileSync(WASM))
+    assert.equal(rx.stats().stage, null)
+    assert.equal(rx.process(new Uint8Array(320 * 240 * 4), 320, 240), -1)
+    assert.equal(rx.stats().stage, 'finders') // the stage a frame without a grid stopped at
+    const vt = new VTerm({ cols: 120, rows: 40 })
+    const camera = { width: 1280, height: 720 }
+    let previous: ReturnType<VTerm['rasterize']> | null = null
+    let file: Uint8Array | null = null
+    let passed = 0
+    for (const [i, ansi] of frames.entries()) {
+      vt.write(ansi)
+      const screen = vt.rasterize({ lineGap: 2 })
+      const corners = framing(camera.width, camera.height, screen.width / screen.height, 0.85, 0.04)
+      // Every third capture is torn: the top half already shows the next frame.
+      const shown = previous && i % 3 === 0 ? tear(screen, previous, screen.height >> 1) : screen
+      previous = screen
+      const shot = cameraView(shown, { ...camera, corners, blur: 1, noise: 6, levels: [30, 220], seed: i + 1 })
+      const ok = rx.process(toRgba(shot), shot.width, shot.height)
+      const stats = rx.stats()
+      assert.ok(ok >= 0, `frame ${i}: ${ok}`)
+      assert.deepEqual(stats.grid, { w: 119, h: 76, profile: 'ssh' })
+      assert.equal(stats.stage, 'done')
+      const module = moduleSize(stats.corners, stats.grid)
+      assert.ok(module !== null && module > 7 && module < 10, `module ${module} px`) // 0.85 × 1280 px over 119 modules, tilted
+      passed += ok
+      if (stats.done) {
+        assert.equal(stats.meta?.name, 'data.bin')
+        assert.equal(stats.meta?.size, original.length)
+        file = rx.file()
+        break
       }
-      assert.ok(passed > 0)
-      assert.ok(file, 'no file restored')
-      assert.ok(Buffer.from(file).equals(Buffer.from(original)), 'restored file differs')
-    } finally {
-      rmSync(dir, { recursive: true, force: true })
     }
+    assert.ok(passed > 0)
+    assert.ok(file, 'no file restored')
+    assert.ok(Buffer.from(file).equals(Buffer.from(original)), 'restored file differs')
+  })
+})
+
+describe('simulator', () => {
+  it('a torn capture takes the top rows from the newer frame', () => {
+    const gray = (fill: number) => ({ width: 2, height: 3, data: new Uint8Array(6).fill(fill) })
+    assert.deepEqual([...tear(gray(1), gray(2), 1).data], [1, 1, 2, 2, 2, 2])
+    assert.deepEqual([...tear(gray(1), gray(2), 9).data], [1, 1, 1, 1, 1, 1])
   })
 })

@@ -25,7 +25,10 @@ export interface VTermOptions {
 export interface RasterOptions {
   cellWidth?: number
   cellHeight?: number
-  /** Pixel rows at the bottom of each cell left in background color, like fonts whose blocks don't fill the line. */
+  /**
+   * Pixel rows at the bottom of each cell left in background color, like fonts whose blocks don't fill the line.
+   * `▀` then covers the top half of the remaining glyph box (as in crates/diodecam-sim).
+   */
   lineGap?: number
 }
 
@@ -153,9 +156,9 @@ export class VTerm {
         case '█':
           return true
         case '▀':
-          return py < chh / 2
+          return py < Math.floor((chh - gap) / 2)
         case '▄':
-          return py >= chh / 2
+          return py >= Math.floor((chh - gap) / 2) // the complement of ▀ (the sender never draws it)
         default:
           return px < cw * 0.6 && py > chh * 0.25 && py < chh * 0.75 // any other glyph: a rough ink blob
       }

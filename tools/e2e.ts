@@ -26,10 +26,10 @@ import type { AddressInfo } from 'node:net'
 import { resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { chromium } from 'playwright-core'
-import { randomBytes } from '../test/helpers.ts'
 import { cargo } from './cargo.ts'
 import { serve } from './serve.ts'
-import { cameraView, framing } from './sim/camera.ts'
+import { cameraView, framing, tear } from './sim/camera.ts'
+import { randomBytes, senderFrames } from './sim/sender.ts'
 import { VTerm, type GrayImage } from './sim/vterm.ts'
 import { Y4mWriter } from './sim/y4m.ts'
 
@@ -71,28 +71,15 @@ const label = `${cols}x${rows}${args['resize-to'] ? `<->${args['resize-to']}` : 
 console.log(`build    diodecam-cli, diodecam-wasm`)
 cargo(['build', '-q', '-p', 'diodecam-cli'])
 const original = randomBytes(Number(args.size), cols * 1000 + rows)
-const inputPath = resolve(OUT, 'random.bin')
-writeFileSync(inputPath, original)
 
 // Probe the layout first (one frame), then size the clip from it.
-const probePath = resolve(OUT, 'probe.jsonl')
-const framesPath = resolve(OUT, 'frames.jsonl')
-const probe = (c: number, r: number) => {
-  cargo(['run', '-q', '-p', 'diodecam-cli', '--', 'frames', inputPath, '--cols', `${c}`, '--rows', `${r}`, '--count', '1', '--out', probePath])
-  return JSON.parse(readFileSync(probePath, 'utf8').split('\n')[0]!)
-}
-const render = (c: number, r: number, count: number, from: number): string[] => {
-  cargo(['run', '-q', '-p', 'diodecam-cli', '--', 'frames', inputPath, '--cols', `${c}`, '--rows', `${r}`, '--count', `${count}`, '--skip', `${from}`, '--out', framesPath])
-  return readFileSync(framesPath, 'utf8')
-    .trim()
-    .split('\n')
-    .slice(1)
-    .map((l) => JSON.parse(l).ansi)
-}
+const sender = { bytes: original, name: 'random.bin' }
+const probe = (c: number, r: number) => senderFrames({ ...sender, cols: c, rows: r, count: 1 }).header
+const render = (c: number, r: number, count: number, from: number): string[] => senderFrames({ ...sender, cols: c, rows: r, count, skip: from }).frames
 const dataTiles = (t: number) => t - 1 / Math.max(1, Math.ceil(10 / t)) // tiles minus the META share
 const header = probe(cols, rows)
-const tiles: number = header.tiles
-const k: number = header.source_symbols
+const tiles = header.tiles
+const k = header.source_symbols
 const dataPerFrame = dataTiles(tiles)
 // --resize-to CxR: the second half of the clip comes from a terminal of that size, continuing the
 // same broadcast (the symbol counter carries on), as if the window were resized mid-transfer.
@@ -155,10 +142,7 @@ for (let c = 0; c < captures; c++) {
   if (since < paintMs) {
     // Repaint in progress: rows above the boundary are frame j, the rest still frame j − 1.
     const older = screen((j + clipFrames - 1) % clipFrames)
-    const boundary = Math.floor((since / paintMs) * shown.height)
-    const mixed = { ...older, data: older.data.slice() }
-    mixed.data.set(shown.data.subarray(0, boundary * shown.width))
-    shown = mixed
+    shown = tear(shown, older, Math.floor((since / paintMs) * shown.height))
     torn++
   }
   video.write(cameraView(shown, { width: camW, height: camH, corners, blur: Number(args.blur), noise: Number(args.noise), levels: [40, 215], seed: c + 1 }))
@@ -274,7 +258,5 @@ try {
   server?.close()
   writeFileSync(resolve(OUT, `result-${cols}x${rows}-${camH}p.json`), JSON.stringify(result, null, 2))
   if (!args.keep) rmSync(y4mPath, { force: true })
-  rmSync(framesPath, { force: true })
-  rmSync(probePath, { force: true })
 }
 process.exit(exitCode)
