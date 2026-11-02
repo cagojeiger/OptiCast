@@ -16,7 +16,8 @@ import { HINT_TEXT, formatSeconds, fps, hint, quantile, recognition, thousands, 
  * @property {boolean} starting The camera is being opened.
  * @property {string} fatal Why the decoder is gone ('' while it works); only a reload helps.
  * @property {{ text: string, tone: 'warn' | 'bad' } | null} notice What the last action failed on.
- * @property {{ saved: boolean, restored: boolean, at: number, canShare: boolean } | null} offer The verified file on offer.
+ * @property {{ saved: boolean, downloaded: boolean, restored: boolean, at: number, canShare: boolean } | null} offer The verified file on
+ *   offer: `saved` once shared, `downloaded` once a download started (it may have been cancelled).
  * @property {Pick<ReceiverStats, 'meta' | 'done' | 'symbols' | 'too_large' | 'limit'> | null} stats The decoder's last answer.
  * @property {number} resumed Pieces brought back from the saved progress.
  * @property {string} workerError A decoder message that does not stop reception.
@@ -101,7 +102,7 @@ export function view(v) {
   let line
   if (advice) line = { text: `⚠ ${HINT_TEXT[advice]}`, tone: advice === 'faster' ? 'ok' : 'warn' }
   else if (v.workerError) line = { text: v.workerError, tone: 'warn' }
-  else if (done) line = { text: offer?.saved ? 'Saved. You can start the next file.' : 'Save it, then press q in the terminal', tone: '' }
+  else if (done) line = { text: offer?.saved ? 'Saved. You can start the next file.' : offer?.downloaded ? 'Download started. Check it, then press q in the terminal' : 'Save it, then press q in the terminal', tone: '' }
   else line = { text: v.resumed > 0 ? `${thousands(v.resumed)} pieces resumed from the last session` : 'Share · Save turns on when the file is complete', tone: '' }
 
   // The line over the camera: the one with the highest priority (docs/web.md §2).

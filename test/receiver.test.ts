@@ -121,7 +121,7 @@ describe('metrics', () => {
 describe('view', () => {
   const meta = { name: 'a.bin', size: 10, id: 'abcd1234', compression: 'none' }
   const stats = (have: number, need: number | null, done = false): ViewState['stats'] => ({ meta, done, symbols: { have, need }, too_large: null, limit: 64 * 2 ** 20 })
-  const offer = (canShare = true): ViewState['offer'] => ({ saved: false, restored: false, at: 0, canShare })
+  const offer = (canShare = true, over: Partial<NonNullable<ViewState['offer']>> = {}): ViewState['offer'] => ({ saved: false, downloaded: false, restored: false, at: 0, canShare, ...over })
   const state = (over: Partial<ViewState> = {}): ViewState => ({
     scanning: false,
     starting: false,
@@ -155,6 +155,8 @@ describe('view', () => {
       ['paused', state({ stats: stats(40, 100) }), 'idle', ['start', 'reset'], ['start'], false, false],
       ['done, share sheet', state({ offer: offer(), stats: stats(100, 100, true) }), 'done', ['start', 'download', 'share', 'reset'], ['share'], false, true],
       ['done, download only', state({ offer: offer(false) }), 'done', ['start', 'download', 'reset'], ['download'], false, true],
+      ['done, downloaded', state({ offer: offer(false, { downloaded: true }) }), 'done', ['start', 'download', 'reset'], ['download'], false, true],
+      ['done, shared', state({ offer: offer(true, { saved: true }) }), 'done', ['start', 'download', 'share', 'reset'], ['share'], false, true],
       ['error', state({ notice: { text: 'No camera found on this device.', tone: 'bad' } }), 'error', ['start', 'reset'], [], false, false],
       ['error, kept file', state({ notice: { text: 'x', tone: 'bad' }, offer: offer() }), 'error', ['start', 'download', 'share', 'reset'], ['share'], false, false],
       ['camera lost mid-transfer', state({ notice: { text: 'The camera was taken by another app. Start again.', tone: 'bad' }, stats: stats(40, 100) }), 'error', ['start', 'reset'], [], false, false],
@@ -184,6 +186,9 @@ describe('view', () => {
     assert.equal(view(state({ scanning: true, stats: stats(1, 5), hint: 'rotate' })).hint.text, '⚠ Hold the phone sideways for a larger grid')
     assert.equal(view(state({ scanning: true, gridSeen: true })).status.text, 'Grid found. Waiting for the file header…')
     assert.equal(view(state({ offer: offer() })).hint.text, 'Save it, then press q in the terminal')
+    // A download can be cancelled (iOS asks first) and the page cannot tell: only a share counts as saved.
+    assert.equal(view(state({ offer: offer(false, { downloaded: true }) })).hint.text, 'Download started. Check it, then press q in the terminal')
+    assert.equal(view(state({ offer: offer(true, { downloaded: true, saved: true }) })).hint.text, 'Saved. You can start the next file.')
     const error = view(state({ notice: { text: 'No camera found on this device.', tone: 'bad' } }))
     assert.equal(error.strip.extra, 'No camera found on this device.')
     assert.deepEqual(error.status, { text: 'No camera found on this device.', tone: 'bad' })
