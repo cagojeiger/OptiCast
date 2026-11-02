@@ -20,6 +20,7 @@
   --bad: #b91c1c;
   --camera: #0a0a0a;
   --on-strip: #ffffff;
+  --backdrop: rgba(0, 0, 0, 0.35);
   --gutter: 16px;
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   font-family: system-ui, -apple-system, 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
@@ -46,6 +47,7 @@
     --warn: #fbbf24;
     --bad: #f87171;
     --on-strip: #171717;
+    --backdrop: rgba(0, 0, 0, 0.6);
   }
 }
 
@@ -71,6 +73,7 @@
     --warn: #fbbf24;
     --bad: #f87171;
     --on-strip: #171717;
+    --backdrop: rgba(0, 0, 0, 0.6);
 }
 
 * {
@@ -516,18 +519,9 @@ a:focus-visible {
   display: grid;
 }
 
+/* ::backdrop inherits from its dialog (Safari 17.4+); older engines keep the light dim. */
 .sheet::backdrop {
-  background: rgba(0, 0, 0, 0.35);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .sheet::backdrop {
-    background: rgba(0, 0, 0, 0.6);
-  }
-}
-
-:root[data-theme='dark'] .sheet::backdrop {
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--backdrop, rgba(0, 0, 0, 0.35));
 }
 
 .handle {

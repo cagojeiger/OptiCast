@@ -86,7 +86,7 @@ keyboard focus and the detected-grid outline.
 Roles (values in `web/style.css`): `bg`, `panel`, `surface`, `line`, `text`, `text-2`, `muted`,
 `disabled`, `link`, `invert-bg`/`invert-text` (primary action and the receiving strip), `secondary`,
 `signal` (green on the camera), `done`, `warn`, `bad`, `on-strip` (text on the done and error strips),
-`camera`, `mono` (the monospace stack).
+`backdrop` (the dim behind a sheet), `camera`, `mono` (the monospace stack).
 
 ## Components
 
