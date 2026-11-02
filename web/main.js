@@ -532,7 +532,13 @@ async function startCamera() {
     settings = track?.getSettings() ?? {}
     lens = track?.label ?? ''
     // Another app or the system can take the camera (a call, the Camera app): frames just stop.
-    if (track) track.onended = () => cameraLost(opened)
+    if (track) {
+      track.onended = () => cameraLost(opened)
+      // iOS mutes the track for a call or when the app goes to the background: say so
+      // instead of keeping Receiving over a frozen picture.
+      track.onmute = () => cameraMuted(opened, true)
+      track.onunmute = () => cameraMuted(opened, false)
+    }
     video.srcObject = stream
     await video.play()
     if (gen !== loopGen) return // stopped meanwhile; stopCamera() released the stream
@@ -628,6 +634,16 @@ function cameraLost(lost) {
   if (stream !== lost) return
   stopCamera()
   notice = { text: 'The camera was taken by another app. Start again.', tone: 'bad' }
+  queueRender()
+}
+
+const CAMERA_PAUSED = { text: 'The camera is paused by the system.', tone: /** @type {const} */ ('warn') }
+
+/** @param {MediaStream} of @param {boolean} muted */
+function cameraMuted(of, muted) {
+  if (stream !== of) return
+  if (muted) notice = CAMERA_PAUSED
+  else if (notice === CAMERA_PAUSED) notice = null
   queueRender()
 }
 

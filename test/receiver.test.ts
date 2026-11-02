@@ -157,6 +157,8 @@ describe('view', () => {
       ['done, download only', state({ offer: offer(false) }), 'done', ['start', 'download', 'reset'], ['download'], false, true],
       ['error', state({ notice: { text: 'No camera found on this device.', tone: 'bad' } }), 'error', ['start', 'reset'], [], false, false],
       ['error, kept file', state({ notice: { text: 'x', tone: 'bad' }, offer: offer() }), 'error', ['start', 'download', 'share', 'reset'], ['share'], false, false],
+      ['camera lost mid-transfer', state({ notice: { text: 'The camera was taken by another app. Start again.', tone: 'bad' }, stats: stats(40, 100) }), 'error', ['start', 'reset'], [], false, false],
+      ['camera paused by the system', state({ scanning: true, notice: { text: 'The camera is paused by the system.', tone: 'warn' }, stats: stats(40, 100) }), 'receiving', ['start', 'reset'], [], true, false],
       ['opening the camera', state({ starting: true }), 'idle', [], ['start'], false, false],
       // Start becomes Reload: the only way back, and the home-screen app has no reload control.
       ['decoder gone', state({ fatal: 'Decoder error.', stats: stats(40, 100) }), 'error', ['start', 'reset'], ['start'], false, false],

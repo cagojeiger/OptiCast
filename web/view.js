@@ -167,7 +167,8 @@ export function view(v) {
 /**
  * What `Copy diagnostics` copies: device, camera and recognition numbers. Never the file's
  * name, content or size, the transfer ID (with the exact size it could identify the file),
- * or device IDs: the fields are picked, not filtered.
+ * or device IDs: the fields are picked one by one, and the camera's settings and
+ * capabilities objects are copied without their deviceId/groupId.
  * @param {DiagnosticsSnapshot} d
  */
 export function diagnostics(d) {

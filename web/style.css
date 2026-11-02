@@ -485,16 +485,18 @@ a:focus-visible {
   outline-offset: 2px;
 }
 
+/* The tracks never grow for a label (Reload is longer than Start): the page stays one column wide. */
 .actions {
   grid-area: actions;
   display: grid;
-  grid-template-columns: 0.9fr 1fr 1.3fr;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.3fr);
   gap: 8px;
 }
 
 .actions button {
   min-height: 52px;
-  padding: 0 8px;
+  min-width: 0;
+  padding: 0 6px;
 }
 
 /* --- sheets -------------------------------------------------------------------------- */
