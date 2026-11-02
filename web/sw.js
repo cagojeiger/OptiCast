@@ -26,6 +26,7 @@ const FILES = [
   'licenses.html',
   'metrics.js',
   'store.js',
+  'view.js',
   'worker.js',
   'wasm.js',
   'diodecam.wasm',

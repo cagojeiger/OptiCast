@@ -15,3 +15,8 @@ declare module '*/wasm.js?v=__V__' {
   const m: typeof import('./wasm.js')
   export = m
 }
+
+declare module '*/view.js?v=__V__' {
+  const m: typeof import('./view.js')
+  export = m
+}

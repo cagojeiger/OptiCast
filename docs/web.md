@@ -149,6 +149,7 @@
 | `worker.js` | WASM 수신기를 소유. 프레임마다 정확히 한 번 응답, 예외는 치명 오류 |
 | `wasm.js` | `diodecam.wasm`(C ABI) 래퍼 |
 | `metrics.js` | 인식률·속도·남은 시간·모듈 크기·실패 단계·조언 같은 순수 함수 |
+| `view.js` | 순수 함수: 상태 → 화면(띠, 버튼 활성, 안내 줄, 카메라 위 글, 링·✓)과 스냅숏 → 진단 JSON. `main.js`의 `render()`가 결과를 화면에 옮긴다 |
 | `store.js` | IndexedDB: 이어 받기 타일, 받은 파일 |
 | `sw.js`, `manifest.webmanifest`, `icon-*.png` | 홈 화면 앱과 오프라인 캐시(아이콘은 `node tools/icons.ts`로 만든다) |
 

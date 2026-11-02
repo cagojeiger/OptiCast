@@ -7,7 +7,6 @@
 // the commit, so a browser never mixes files from two deploys.
 
 import {
-  HINT_TEXT,
   STAGE_TEXT,
   eta,
   failure,
@@ -24,12 +23,13 @@ import {
   scanWidth,
   symbolRate,
   thousands,
-  tooLargeText,
   trim,
 } from './metrics.js?v=__V__'
 import * as store from './store.js?v=__V__'
+import { diagnostics, view } from './view.js?v=__V__'
 
 /** @import { FrameSample, ProgressSample } from './metrics.js' */
+/** @import { Session } from './view.js' */
 /** @import { ReceiverStats } from './wasm.js' */
 /** @import { FromWorker, ToWorker } from './worker.js' */
 
@@ -170,21 +170,9 @@ let renderQueued = false
 /** @type {WakeLockSentinel | null} */
 let wakeLock = null
 
-/** Diagnostics since the camera started (docs/web.md §6): where frames stopped, and how good the grids were. */
+/** @returns {Session} Diagnostics since the camera started (docs/web.md §6). */
 function newSession() {
-  return {
-    started: performance.now(),
-    frames: 0,
-    /** @type {Record<string, number>} */
-    stages: {},
-    detections: 0,
-    tracked: 0,
-    corrected: 0,
-    /** @type {number[]} */
-    modules: [],
-    /** @type {number[]} */
-    residuals: [],
-  }
+  return { started: performance.now(), frames: 0, stages: {}, detections: 0, tracked: 0, corrected: 0, modules: [], residuals: [] }
 }
 let session = newSession()
 
@@ -278,7 +266,6 @@ worker.onerror = (event) => {
 /** The decoder is gone: stop, and let a reload pick up the saved progress. */
 function fatal() {
   stopCamera()
-  startBtn.disabled = true
   fatalError = 'Decoder error. Reload to resume from the saved progress.'
 }
 
@@ -406,12 +393,8 @@ function render() {
 
   const need = s?.symbols.need ?? null
   const have = s?.symbols.have ?? 0
-  const fraction = need ? Math.min(1, have / need) : 0
   const left = eta(have, need, symbolRate(progress))
   stat.eta.textContent = left === null ? '—' : formatSeconds(left)
-  const error = (!!notice && notice.tone === 'bad') || fatalError !== ''
-  const done = !!offer && !scanning && !error
-  const receiving = scanning && !!s?.meta && !s.done
 
   // File row: the transfer on screen, else the kept file, else nothing.
   if (s?.meta) {
@@ -429,87 +412,55 @@ function render() {
   }
   fileEl.classList.toggle('empty', !s?.meta && !offer)
 
-  // Progress bar, ring and tick.
-  barEl.style.width = `${(done ? 1 : fraction) * 100}%`
-  progressSection.classList.toggle('done', done)
-  ringEl.hidden = !receiving
-  ringEl.style.setProperty('--p', `${fraction * 100}%`)
-  ringLabel.textContent = `${Math.floor(fraction * 100)}%`
-  ringEl.setAttribute('aria-valuenow', String(Math.floor(fraction * 100)))
-  tickEl.hidden = !done
-  promptEl.hidden = done
+  const v = view({
+    scanning,
+    starting,
+    fatal: fatalError,
+    notice,
+    offer: offer && { saved: offer.saved, restored: offer.restored, at: offer.at, canShare: navigator.canShare?.({ files: [offer.file] }) ?? false },
+    stats: s,
+    resumed,
+    workerError,
+    rate,
+    left,
+    hint: hint(frames, video.videoHeight > video.videoWidth),
+    gridSeen: frames.some((f) => f.grid),
+  })
 
-  // The strip: one place, four colors.
-  const resumedText = resumed > 0 ? ` · ${thousands(resumed)} resumed` : ''
-  if (error) {
-    stripEl.dataset.state = 'error'
-    stripState.textContent = '✕ Error'
-    symbolsEl.textContent = ''
-    stripExtra.textContent = fatalError || notice?.text || ''
-    stripRight.textContent = ''
-  } else if (done && offer) {
-    stripEl.dataset.state = 'done'
-    stripState.textContent = '✓ Received'
-    symbolsEl.textContent = 'SHA-256 verified'
-    stripExtra.textContent = ''
-    stripRight.textContent = `at ${new Date(offer.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-  } else if (receiving) {
-    stripEl.dataset.state = 'receiving'
-    stripState.textContent = '● Receiving'
-    symbolsEl.textContent = `${thousands(have)} / ${need === null ? '?' : thousands(need)}`
-    stripExtra.textContent = `${rate === null ? '' : `${Math.round(rate * 100)}% read`}${resumedText}`
-    stripRight.textContent = left === null ? `${Math.floor(fraction * 100)}%` : `${formatSeconds(left)} left`
-  } else {
-    stripEl.dataset.state = 'idle'
-    stripState.textContent = scanning ? '○ Looking' : s?.meta ? '○ Paused' : '○ Idle'
-    symbolsEl.textContent = s?.meta ? `${thousands(have)} / ${need === null ? '?' : thousands(need)}` : ''
-    stripExtra.textContent = ''
-    stripRight.textContent = `${Math.floor(fraction * 100)}%`
-  }
+  // Progress bar, ring and tick.
+  barEl.style.width = `${v.fraction * 100}%`
+  progressSection.classList.toggle('done', v.complete)
+  ringEl.hidden = !v.ring
+  ringEl.style.setProperty('--p', `${v.fraction * 100}%`)
+  ringLabel.textContent = `${Math.floor(v.fraction * 100)}%`
+  ringEl.setAttribute('aria-valuenow', String(Math.floor(v.fraction * 100)))
+  tickEl.hidden = !v.tick
+  promptEl.hidden = !v.prompt
+
+  // The strip: one place, four colours.
+  stripEl.dataset.state = v.strip.state
+  stripState.textContent = v.strip.label
+  symbolsEl.textContent = v.strip.symbols
+  stripExtra.textContent = v.strip.extra
+  stripRight.textContent = v.strip.right
 
   // Buttons: always present; enabled when they can act.
-  startLabel.textContent = scanning ? 'Stop' : 'Start'
-  startBtn.classList.toggle('primary', !scanning && !offer && !error)
-  startBtn.querySelector('svg')?.replaceChildren(pathEl(scanning ? 'M5 5h14v14H5z' : 'M7 4l13 8-13 8z'))
-  const canShare = !!offer && (navigator.canShare?.({ files: [offer.file] }) ?? false)
-  shareBtn.disabled = !canShare || receiving
-  downloadBtn.disabled = !offer || receiving
-  shareBtn.classList.toggle('primary', canShare)
-  downloadBtn.classList.toggle('primary', !!offer && !canShare)
-  resetBtn.disabled = !offer && !s?.meta && !scanning && !error
+  const { start, download, share, reset } = v.buttons
+  startLabel.textContent = start.label
+  startBtn.disabled = !start.enabled
+  startBtn.classList.toggle('primary', start.primary)
+  startBtn.querySelector('svg')?.replaceChildren(pathEl(start.label === 'Stop' ? 'M5 5h14v14H5z' : 'M7 4l13 8-13 8z'))
+  downloadBtn.disabled = !download.enabled
+  downloadBtn.classList.toggle('primary', download.primary)
+  shareBtn.disabled = !share.enabled
+  shareBtn.classList.toggle('primary', share.primary)
+  resetBtn.disabled = !reset.enabled
 
   // Hint line: always 20 px; the reason a control is off, or what to change.
-  const h = scanning && !s?.done ? hint(frames, video.videoHeight > video.videoWidth) : null
-  if (h) {
-    hintEl.textContent = `⚠ ${HINT_TEXT[h]}`
-    hintEl.dataset.tone = h === 'faster' ? 'ok' : 'warn'
-  } else if (workerError) {
-    hintEl.textContent = workerError
-    hintEl.dataset.tone = 'warn'
-  } else if (done) {
-    hintEl.textContent = offer?.saved ? 'Saved. You can start the next file.' : 'Save it, then press q in the terminal'
-    hintEl.dataset.tone = ''
-  } else {
-    hintEl.textContent = resumed > 0 ? `${thousands(resumed)} pieces resumed from the last session` : 'Share · Save turns on when the file is complete'
-    hintEl.dataset.tone = ''
-  }
-
+  hintEl.textContent = v.hint.text
+  hintEl.dataset.tone = v.hint.tone
   // Status: the prompt over the camera (idle), or the one-line caption while live.
-  if (fatalError) {
-    setStatus(fatalError, 'bad')
-  } else if (notice) {
-    setStatus(notice.text, notice.tone)
-  } else if (starting) {
-    setStatus('Opening the camera…')
-  } else if (s?.too_large && !s.meta) {
-    setStatus(`${tooLargeText(s.too_large.size, s.limit)} · id ${s.too_large.id}`, 'bad')
-  } else if (!scanning) {
-    setStatus(offer ? (offer.restored ? 'The file from last time is still here. Save or share it.' : 'Received. Save the file.') : s?.meta ? 'Paused. Start the camera to continue.' : 'Start the camera and frame the whole sender screen')
-  } else if (!s?.meta) {
-    setStatus(frames.some((f) => f.grid) ? 'Grid found. Waiting for the file header…' : 'Frame the whole sender screen')
-  } else {
-    setStatus(`${thousands(Math.max(0, (need ?? 0) - have))} pieces to go${left === null ? '' : ` · about ${formatSeconds(left)}`}`)
-  }
+  setStatus(v.status.text, v.status.tone)
   if (DEBUG && s) debugEl.textContent = JSON.stringify({ ...s, tile_centers: undefined }, null, 1)
 }
 
@@ -536,7 +487,6 @@ async function startCamera() {
   }
   if (last?.done) reset() // a finished transfer is not resumed: start a new receive
   starting = true
-  startBtn.disabled = true
   queueRender()
   try {
     stream = await openCamera(readCamera())
@@ -559,7 +509,6 @@ async function startCamera() {
     notice = { text: CAMERA_ERRORS[name] ?? `Could not open the camera: ${message}`, tone: 'bad' }
   } finally {
     starting = false
-    startBtn.disabled = false
     queueRender()
   }
 }
@@ -719,64 +668,34 @@ async function shareFile() {
 
 // --- diagnostics ------------------------------------------------------------------------
 
-/**
- * What `Copy diagnostics` copies: device, camera and recognition numbers. No file name,
- * content, size or transfer ID, and no device IDs.
- */
-function diagnostics() {
+/** `Copy diagnostics` (view.js picks what is copied from this snapshot). */
+function snapshot() {
   const track = stream?.getVideoTracks()[0]
-  /** @param {object | undefined} o */
-  const withoutIds = (o) => (o ? Object.fromEntries(Object.entries(o).filter(([k]) => k !== 'deviceId' && k !== 'groupId')) : null)
-  /** @param {number[]} v @param {number} q */
-  const at = (v, q) => {
-    const x = quantile(v, q)
-    return x === null ? null : Math.round(x * 100) / 100
-  }
-  const s = last
-  const rate = recognition(frames)
-  const capture = fps(captureTimes)
-  const processed = fps(resultTimes)
   return {
     app: `DiodeCam __VERSION__ (${VERSION})`,
     at: new Date().toISOString(),
+    now: performance.now(),
     agent: navigator.userAgent,
     standalone: matchMedia('(display-mode: standalone)').matches,
     viewport: `${innerWidth}×${innerHeight} @${devicePixelRatio}x`,
-    camera: {
-      lens: lens || null,
-      chosen: readCamera() ? 'manual' : 'auto',
-      video: `${video.videoWidth}×${video.videoHeight}`,
-      settings: withoutIds(settings),
-      capabilities: withoutIds(track?.getCapabilities?.()),
-    },
-    scan: `${scanCanvas.width}×${scanCanvas.height}`,
-    session: {
-      seconds: Math.round((performance.now() - session.started) / 1000),
-      frames: session.frames,
-      stages: session.stages,
-      grids: session.detections,
-      tracked: session.tracked,
-      corrected: session.corrected,
-      module_px: { p10: at(session.modules, 0.1), p50: at(session.modules, 0.5), p90: at(session.modules, 0.9) },
-      residual_p50: at(session.residuals, 0.5),
-    },
-    recent: {
-      capture_fps: capture && Math.round(capture),
-      process_fps: processed && Math.round(processed),
-      decode_ms: Math.round(decodeMs * 10) / 10,
-      recognition: rate === null ? null : Math.round(rate * 1000) / 1000,
-      hint: scanning ? hint(frames, video.videoHeight > video.videoWidth) : null,
-    },
-    grid: s?.grid ?? null,
-    // Progress only: the transfer ID and exact size together could identify the file.
-    transfer: s?.meta
-      ? { progress: Math.round((s.symbols.have / (s.symbols.need || 1)) * 100) / 100, foreign: s.foreign, invalid: s.invalid, failed: s.failed, done: s.done }
-      : null,
+    lens,
+    manualCamera: readCamera() !== '',
+    video: { width: video.videoWidth, height: video.videoHeight },
+    scan: { width: scanCanvas.width, height: scanCanvas.height },
+    settings,
+    capabilities: track?.getCapabilities?.() ?? null,
+    session,
+    scanning,
+    frames,
+    captureTimes,
+    resultTimes,
+    decodeMs,
+    stats: last,
   }
 }
 
 async function copyDiagnostics() {
-  const text = JSON.stringify(diagnostics(), null, 1)
+  const text = JSON.stringify(diagnostics(snapshot()), null, 1)
   try {
     await navigator.clipboard.writeText(text)
     debugEl.hidden = !DEBUG
