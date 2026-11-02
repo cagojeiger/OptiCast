@@ -810,6 +810,10 @@ html[data-view='receiver'] #setup {
   overflow: auto;
 }
 
+.card.run {
+  justify-content: space-evenly;
+}
+
 .card.phone {
   justify-content: center;
 }
