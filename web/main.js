@@ -20,6 +20,7 @@ import {
   quantile,
   recognition,
   safeName,
+  captureWidth,
   scanWidth,
   symbolRate,
   thousands,
@@ -35,6 +36,8 @@ import * as store from './store.js?v=__V__'
 const params = new URLSearchParams(location.search)
 /** `?scan=`: width of the image handed to the decoder (see scanWidth). */
 const SCAN_PARAM = params.get('scan')
+/** `?cap=`: width asked of the camera (see captureWidth); pair with `?scan=` of the same value. */
+const CAP_WIDTH = captureWidth(params.get('cap'))
 /** `?max=`: largest file accepted, in MiB. */
 const LIMIT_MIB = limitMib(params.get('max'))
 const DEBUG = params.get('debug') === '1'
@@ -549,7 +552,7 @@ async function startCamera() {
  * @param {string} deviceId
  */
 async function openCamera(deviceId) {
-  const base = { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60 } }
+  const base = { width: { ideal: CAP_WIDTH }, height: { ideal: Math.round((CAP_WIDTH * 9) / 16) }, frameRate: { ideal: 60 } }
   const auto = () => navigator.mediaDevices.getUserMedia({ audio: false, video: { ...base, facingMode: { ideal: 'environment' } } })
   if (!deviceId) return auto()
   try {

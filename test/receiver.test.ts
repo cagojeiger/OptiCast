@@ -11,7 +11,7 @@ import { join, resolve } from 'node:path'
 import { describe, it } from 'node:test'
 import { cameraView, framing, toRgba } from '../tools/sim/camera.ts'
 import { VTerm } from '../tools/sim/vterm.ts'
-import { MIN_MODULE_PX, eta, failure, formatBytes, fps, hint, limitMib, moduleSize, quantile, recognition, safeName, scanWidth, symbolRate, tooLargeText, trim, type FrameSample, type Stage } from '../web/metrics.js'
+import { MIN_MODULE_PX, captureWidth, eta, failure, formatBytes, fps, hint, limitMib, moduleSize, quantile, recognition, safeName, scanWidth, symbolRate, tooLargeText, trim, type FrameSample, type Stage } from '../web/metrics.js'
 import { evictable, exportTiles, type SavedMeta } from '../web/store.js'
 import { OUT_OF_MEMORY, WasmReceiver } from '../web/wasm.js'
 import { randomBytes } from './helpers.ts'
@@ -160,6 +160,10 @@ describe('URL options', () => {
     assert.equal(scanWidth(null, 3840), 1920)
     assert.equal(scanWidth('1280', 1920), 1280)
     assert.equal(scanWidth('-1', 1920), 64)
+    assert.equal(captureWidth(null), 1920)
+    assert.equal(captureWidth('3840'), 3840)
+    assert.equal(captureWidth('9999'), 3840)
+    assert.equal(captureWidth('x'), 1920)
     assert.equal(scanWidth('99999', 1920), 1920)
     assert.equal(scanWidth('640.9', 1920), 640)
     assert.equal(scanWidth('abc', 1280), 1280)
