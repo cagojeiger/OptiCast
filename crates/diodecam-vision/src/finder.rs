@@ -220,22 +220,28 @@ fn confirm(img: &GrayImage, bm: &Bitmap, cx: f64, y: usize, color: u8, total: u3
     if (if bright { contrast } else { -contrast }) < MIN_CONTRAST {
         return;
     }
+    merge(out, Candidate { x: cx, y: cy, mh, mv, bright, count: 1 });
+}
+
+/// Adds `k` to `out`, folded into a candidate for the same mark if there is one
+/// (weighted by the rows that confirmed each).
+pub fn merge(out: &mut Vec<Candidate>, k: Candidate) {
     for c in out.iter_mut() {
-        if c.bright == bright
-            && (c.x - cx).abs() <= 1.5 * c.mh.max(mh)
-            && (c.y - cy).abs() <= 1.5 * c.mv.max(mv)
-            && (0.5..=2.0).contains(&(c.module() / ((mh + mv) / 2.0)))
+        if c.bright == k.bright
+            && (c.x - k.x).abs() <= 1.5 * c.mh.max(k.mh)
+            && (c.y - k.y).abs() <= 1.5 * c.mv.max(k.mv)
+            && (0.5..=2.0).contains(&(c.module() / k.module()))
         {
-            let n = c.count as f64;
-            c.x = (c.x * n + cx) / (n + 1.0);
-            c.y = (c.y * n + cy) / (n + 1.0);
-            c.mh = (c.mh * n + mh) / (n + 1.0);
-            c.mv = (c.mv * n + mv) / (n + 1.0);
-            c.count += 1;
+            let (n, m) = (c.count as f64, k.count as f64);
+            c.x = (c.x * n + k.x * m) / (n + m);
+            c.y = (c.y * n + k.y * m) / (n + m);
+            c.mh = (c.mh * n + k.mh * m) / (n + m);
+            c.mv = (c.mv * n + k.mv * m) / (n + m);
+            c.count += k.count;
             return;
         }
     }
-    out.push(Candidate { x: cx, y: cy, mh, mv, bright, count: 1 });
+    out.push(k);
 }
 
 /// Three big finders in their roles.

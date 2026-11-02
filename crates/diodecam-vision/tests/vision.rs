@@ -356,3 +356,36 @@ fn file_restored_through_the_camera_path() {
         eprintln!("{camera_size:?} {theme:?}: restored 30 kB in {frames} camera frames");
     }
 }
+
+/// Angle sweep, not run by default: `cargo test --release -p diodecam-vision
+/// --test vision angle_sweep -- --ignored --nocapture`. Prints the frames whose
+/// FI decoded, the tile pass rate, wrong tiles and every case that missed a frame.
+#[test]
+#[ignore]
+fn angle_sweep() {
+    let mut all = Vec::new();
+    let mut seed = 0;
+    for (cols, rows) in TERMINALS {
+        for fill in [0.3, 0.5, 0.7] {
+            for blur in [0, 1, 2] {
+                for (pitch, roll) in [(0.0, 0.0), (15.0, 5.0)] {
+                    for yaw in (-9..=9).map(|k| k as f64 * 5.0) {
+                        seed += 1;
+                        let case = Case { cols, rows, fill, blur, yaw, pitch, roll, seed, ..moderate() };
+                        let out = film(&case, 2);
+                        let (_, pass, wrong, det) = summary(&out);
+                        if det < out.len() || wrong > 0 {
+                            let name =
+                                format!("{cols}x{rows} fill {fill} blur {blur} yaw {yaw} pitch {pitch} roll {roll}");
+                            eprintln!("missed {name:50} FI {det}/{}  tiles {pass:.2}  wrong {wrong}", out.len());
+                        }
+                        all.extend(out);
+                    }
+                }
+            }
+        }
+    }
+    let (_, pass, wrong, det) = summary(&all);
+    eprintln!("angle sweep: {seed} cases, FI {det}/{}  tiles {pass:.3}  wrong {wrong}", all.len());
+    assert_eq!(wrong, 0);
+}
