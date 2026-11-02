@@ -196,7 +196,8 @@ try {
   }
   page.on('pageerror', (err) => pageError(`page error: ${err.message}`))
   page.on('console', (msg) => msg.type() === 'error' && pageError(`console: ${msg.text()}`))
-  await page.goto(`${url}?debug=1${args.scan ? `&scan=${args.scan}` : ''}`)
+  // Desktop Chrome would get the setup page: force the receiver.
+  await page.goto(`${url}?receiver=1&debug=1${args.scan ? `&scan=${args.scan}` : ''}`)
   // Stats live in a sheet; its text is readable without opening it.
   await page.getByTestId('start').click()
   const startedAt = Date.now()

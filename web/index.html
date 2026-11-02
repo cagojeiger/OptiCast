@@ -8,11 +8,23 @@
     <meta name="color-scheme" content="light dark" />
     <meta name="apple-mobile-web-app-title" content="DiodeCam" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <title>DiodeCam Receiver</title>
+    <title>DiodeCam</title>
     <link rel="manifest" href="./manifest.webmanifest?v=__V__" />
-    <link rel="icon" href="./icon-192.png?v=__V__" />
+    <link rel="icon" href="./icon.svg?v=__V__" type="image/svg+xml" />
+    <link rel="icon" href="./icon-192.png?v=__V__" type="image/png" sizes="192x192" />
     <link rel="apple-touch-icon" href="./icon-180.png?v=__V__" />
     <link rel="stylesheet" href="./style.css?v=__V__" />
+    <script>
+      // Desktop (a fine pointer that hovers) gets the setup page; phones, and the
+      // home-screen app, get the receiver. `?receiver=1` forces the receiver (the
+      // e2e runs in desktop Chrome). Decided before paint; the script loads at the end of body.
+      {
+        const forced = new URLSearchParams(location.search).get('receiver') === '1'
+        const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true
+        const desktop = matchMedia('(hover: hover) and (pointer: fine)').matches
+        document.documentElement.dataset.view = forced || standalone || !desktop ? 'receiver' : 'setup'
+      }
+    </script>
   </head>
   <body>
     <!-- One fixed layout (DESIGN.md): every control exists in every state; only fill, text and
@@ -112,6 +124,67 @@
       <pre id="debug" data-testid="debug" hidden></pre>
     </dialog>
 
-    <script type="module" src="./main.js?v=__V__"></script>
+    <!-- Desktop: install the sender, send, connect the phone. No camera here (DESIGN.md). -->
+    <section id="setup" class="setup" aria-label="Setup">
+      <header class="setup-head">
+        <h1>DiodeCam</h1>
+        <p>One-way file transfer: point a phone camera at a terminal. No network, USB or app install.</p>
+        <a href="https://github.com/cagojeiger/diodecam">GitHub</a>
+      </header>
+      <div class="setup-grid">
+        <div class="setup-col">
+          <section class="card">
+            <h2><span class="step">1</span>Install the sender</h2>
+            <div class="targets" role="group" aria-label="Server type">
+              <button type="button" data-target="x86_64-unknown-linux-musl" aria-pressed="true">Linux x86_64</button>
+              <button type="button" data-target="aarch64-unknown-linux-musl" aria-pressed="false">Linux arm64</button>
+              <button type="button" data-target="aarch64-apple-darwin" aria-pressed="false">macOS (Apple silicon)</button>
+              <button type="button" data-target="x86_64-apple-darwin" aria-pressed="false">macOS (Intel)</button>
+            </div>
+            <div class="subcard">
+              <h3>Air-gapped server <span class="pill">default</span></h3>
+              <div class="row">
+                <a class="button primary" id="dl-tar" href="https://github.com/cagojeiger/diodecam/releases/latest/download/diodecam-x86_64-unknown-linux-musl.tar.gz"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 11l4 4 4-4M5 21h14" /></svg>Download tar.gz</a>
+                <a class="button" id="dl-sha" href="https://github.com/cagojeiger/diodecam/releases/latest/download/diodecam-x86_64-unknown-linux-musl.tar.gz.sha256">sha256</a>
+              </div>
+              <p>Move both files to the server through your organisation's approved import path, then verify and unpack there.</p>
+              <div class="code"><pre id="cmd-verify">sha256sum -c diodecam-x86_64-unknown-linux-musl.tar.gz.sha256
+tar xzf diodecam-x86_64-unknown-linux-musl.tar.gz</pre><button type="button" class="copy" data-copy="cmd-verify">Copy</button></div>
+            </div>
+            <div class="subcard">
+              <h3>Server with internet access</h3>
+              <div class="code"><pre id="cmd-curl">curl -fsSL https://github.com/cagojeiger/diodecam/releases/latest/download/diodecam-x86_64-unknown-linux-musl.tar.gz | tar xz</pre><button type="button" class="copy" data-copy="cmd-curl">Copy</button></div>
+            </div>
+          </section>
+          <section class="card">
+            <h2><span class="step">2</span>Send</h2>
+            <div class="code"><pre id="cmd-send">./diodecam-x86_64-unknown-linux-musl/diodecam send report.pdf</pre><button type="button" class="copy" data-copy="cmd-send">Copy</button></div>
+            <p class="muted">A larger terminal is faster: at 200×55, 1 MiB takes about 26 s. Pack folders with <code>tar czf</code>. Keys: <code>+</code>/<code>-</code> fps, space pause, <code>q</code> quit.</p>
+          </section>
+        </div>
+        <aside class="card">
+          <h2><span class="step">3</span>Receive on a phone</h2>
+          <img class="qr" src="./qr.svg?v=__V__" width="232" height="232" alt="QR code for the receiver address" />
+          <p>Scan with the phone camera to open the receiver. In Safari, Share → Add to Home Screen makes it work offline.</p>
+          <p class="muted">The receiver uploads nothing and never opens the received file; it is saved only when you tap Share or Download.</p>
+          <a class="muted" href="./?receiver=1">Open the receiver here anyway ›</a>
+        </aside>
+      </div>
+      <footer class="setup-foot">
+        <span>v0.3.0</span>
+        <span>Exporting data from an air-gapped network needs your organisation's approval.</span>
+      </footer>
+    </section>
+
+    <script>
+      // Only this view's module: the setup page never fetches the worker or the wasm.
+      // Appended here, after all the markup, so the module runs against a complete page.
+      {
+        const script = document.createElement('script')
+        script.type = 'module'
+        script.src = document.documentElement.dataset.view === 'setup' ? './setup.js?v=__V__' : './main.js?v=__V__'
+        document.body.append(script)
+      }
+    </script>
   </body>
 </html>

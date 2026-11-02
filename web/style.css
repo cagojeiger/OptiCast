@@ -659,3 +659,263 @@ dd {
     display: none;
   }
 }
+
+/* --- view switch: phone = receiver, desktop = setup page ---------------------------- */
+
+html[data-view='setup'] main,
+html[data-view='setup'] .sheet,
+html:not([data-view]) #setup {
+  display: none;
+}
+
+html[data-view='receiver'] #setup {
+  display: none;
+}
+
+/* --- desktop setup page --------------------------------------------------------------- */
+
+.setup {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.setup > * {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 32px;
+}
+
+.setup-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 16px;
+  padding-top: 40px;
+  padding-bottom: 28px;
+}
+
+.setup-head h1 {
+  font-size: 26px;
+  flex-grow: 0;
+}
+
+.setup-head p {
+  margin: 0;
+  flex: 999 1 320px;
+  color: var(--muted);
+}
+
+.setup a {
+  color: var(--link);
+}
+
+.setup-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  align-items: flex-start;
+  flex-grow: 1;
+}
+
+.setup-col {
+  flex: 999 1 560px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.setup aside.card {
+  flex: 1 1 320px;
+}
+
+.setup .card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.setup h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.step {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--invert-bg);
+  color: var(--invert-text);
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.setup h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pill {
+  font-size: 12px;
+  font-weight: 400;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--secondary);
+}
+
+.setup p {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.setup p.muted,
+.setup a.muted {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.setup code {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+
+.targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.targets button {
+  background: transparent;
+  border-color: var(--line);
+  font-weight: 400;
+  font-size: 14px;
+  padding: 0 16px;
+}
+
+.targets button[aria-pressed='true'] {
+  background: var(--invert-bg);
+  border-color: var(--invert-bg);
+  color: var(--invert-text);
+  font-weight: 600;
+}
+
+.subcard {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+a.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid var(--secondary);
+  background: var(--secondary);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+a.button.primary {
+  background: var(--invert-bg);
+  border-color: var(--invert-bg);
+  color: var(--invert-text);
+}
+
+a.button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.code {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 10px 10px 14px;
+}
+
+.code pre {
+  margin: 0;
+  flex-grow: 1;
+  min-width: 0;
+  overflow-x: auto;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.code .copy {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 400;
+  border-radius: 8px;
+}
+
+.qr {
+  align-self: center;
+  width: 232px;
+  height: 232px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.setup-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding-top: 28px;
+  padding-bottom: 24px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+@media (hover: hover) and (pointer: fine) and (min-height: 541px) {
+  html[data-view='receiver'] main {
+    /* The forced receiver on a desktop: phone proportions, not a wall of camera. */
+    max-width: 480px;
+  }
+}

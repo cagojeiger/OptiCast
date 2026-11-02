@@ -17,7 +17,7 @@
 ## Brand
 
 A quiet tool that sits next to a terminal. Neutral gray in light and dark, one signal hue, no
-decoration. The grid-finder motif from the frame's corner marks is the icon.
+decoration. The icon is a lens ring with the grid the camera reads inside it (`tools/icons.ts`).
 
 ## Product goals
 
@@ -137,4 +137,4 @@ Nothing is uploaded; the page never opens the received file.
 
 - Whether the desktop page also offers a built-in practice screen for lens diagnostics without a
   server (planned, not yet designed in detail).
-- The QR's final address once a custom domain is decided.
+- The QR (`web/qr.svg`, from `tools/qr.ts`) encodes the github.io address; regenerate it if a custom domain is chosen.

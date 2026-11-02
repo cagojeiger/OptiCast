@@ -11,7 +11,7 @@ crates/diodecam-vision/  회색조 카메라 영상 → 모듈 격자 (docs/web.
 crates/diodecam-wasm/    배선: vision + core Assembler 수신 세션, 통계 JSON, 이어 받기, C ABI
 crates/diodecam-sim/     테스트 전용 가상 터미널·카메라. 시험 대상인 vision과 코드를 공유하지 않는다
 web/                     수신 페이지 (docs/web.md, DESIGN.md)
-tools/                   wasm 빌드, 로컬 서버, e2e 와 시뮬레이터
+tools/                   wasm 빌드, 로컬 서버, e2e 와 시뮬레이터, 아이콘·QR 생성
 test/                    receiver.test.ts (node:test)
 ```
 
@@ -24,7 +24,8 @@ cargo test -p diodecam-cli --test tmux_probe -- --ignored   # 실제 tmux 화면
 pnpm install && pnpm typecheck         # JSDoc 타입 검사 (tsc, 빌드 아님)
 pnpm wasm && pnpm test                 # web/diodecam.wasm 빌드 후 JS 테스트
 pnpm serve                             # http://localhost:5173 에서 수신기 (오프라인 캐시 없음: sw.js는 배포본에서만)
-node tools/icons.ts                    # web/icon-*.png 다시 만들기
+node tools/icons.ts                    # web/icon.svg 와 icon-*.png 다시 만들기
+node tools/qr.ts                       # web/qr.svg (수신기 주소 QR, 데스크톱 설정 페이지용) 다시 만들기
 ```
 
 rustup 기본 툴체인이 x86_64인 Mac에서는 cargo 앞에 `RUSTUP_TOOLCHAIN=stable-aarch64-apple-darwin
