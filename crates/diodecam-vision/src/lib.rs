@@ -172,15 +172,17 @@ impl Vision {
             self.track = None;
         }
         // Full search: the design's window (long side / 40) on 3×3 means, then
-        // one fallback — a larger window for close-ups whose finder centre is
-        // wider than that, or a small one on raw pixels for tiny modules and for
-        // marks next to a surround darker or lighter than the screen. While
-        // nothing is found the two fallbacks take turns, so an empty view costs
-        // two passes per frame.
+        // two fallbacks — a larger window for close-ups whose finder centre is
+        // wider than that, and a small one on raw pixels for tiny modules and for
+        // marks next to a surround darker or lighter than the screen. The first
+        // frame tries all three, so a grid of small modules is read at once;
+        // while nothing is found the two fallbacks then take turns, so an empty
+        // view costs two passes per frame.
         let long = width.max(height);
         let passes = [((long / 40).max(15), true), ((long / 16).max(15), true), ((long / 96).max(15), false)];
         let fallback = 1 + (self.misses % 2) as usize;
-        for (_, (window, smooth)) in passes.into_iter().enumerate().filter(|&(p, _)| p == 0 || p == fallback) {
+        let first = self.misses == 0;
+        for (_, (window, smooth)) in passes.into_iter().enumerate().filter(|&(p, _)| p == 0 || p == fallback || first) {
             self.cands.clear();
             let all = Rect { x0: 0, y0: 0, x1: width, y1: height };
             self.binarizer.binarize(&img, all, window | 1, smooth, &mut self.bitmap);
