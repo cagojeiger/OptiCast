@@ -1,5 +1,5 @@
 // The "this is what the terminal looks like" picture on the setup page
-// (web/example-terminal.svg): one real sender frame for a small sample file,
+// (web/example-terminal.svg): one real sender frame, mid-transfer, for a small sample file,
 // replayed through the virtual terminal and drawn cell by cell, status rows included,
 // so the picture is what the terminal shows. Regenerate when the frame format or status line changes.
 //
@@ -21,7 +21,7 @@ const dir = mkdtempSync(join(tmpdir(), 'diodecam-example-'))
 const input = join(dir, 'report.pdf')
 writeFileSync(input, randomBytes(24_000, 11))
 const out = join(dir, 'frames.jsonl')
-cargo(['run', '-q', '-p', 'diodecam-cli', '--', 'frames', input, '--cols', `${COLS}`, '--rows', `${ROWS}`, '--count', '1', '--out', out])
+cargo(['run', '-q', '-p', 'diodecam-cli', '--', 'frames', input, '--cols', `${COLS}`, '--rows', `${ROWS}`, '--skip', '70', '--count', '1', '--out', out])
 // JSON lines: a header object first, then one object per frame.
 const frame = JSON.parse(readFileSync(out, 'utf8').split('\n').filter((l) => l.trim())[1]!) as { ansi: string }
 
@@ -32,7 +32,7 @@ term.write(frame.ansi)
 const img = term.rasterize({ cellWidth: CELL_W, cellHeight: CELL_H, lineGap: 0 })
 const light = (x: number, y: number) => img.data[y * img.width + x]! > 0x80
 
-// Crop to the columns the sender drew (it centres a grid narrower than the terminal).
+// Crop to the columns the sender drew (the grid is narrower than the terminal).
 let minCol = COLS
 let maxCol = -1
 for (let row = 0; row < ROWS - 2; row++)
@@ -62,18 +62,17 @@ for (let row = 0; row < GRID_ROWS; row++)
   }
 
 // The two status rows exactly as the terminal shows them: the sender's own text, read back
-// from the cells, light on dark (it uses reverse video), trimmed to the drawn width.
+// from the cells, same columns as the grid, trimmed to the drawn width.
 const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;')
 const statusRows = [GRID_ROWS, GRID_ROWS + 1].map((row, i) => {
-  const { text } = term.line(row)
+  const text = term.line(row)
   const shown = text.slice(minCol, minCol + DRAWN).replace(/\s+$/, '')
-  return `<text x="${CELL_W / 2}" y="${row * CELL_H + 12}" font-family="ui-monospace, SF Mono, Menlo, Consolas, monospace" font-size="13" textLength="${shown.length * CELL_W}" lengthAdjust="spacingAndGlyphs" fill="#d4d4d4" xml:space="preserve">${esc(shown)}</text>`
+  return `<text x="0" y="${row * CELL_H + 12}" font-family="ui-monospace, SF Mono, Menlo, Consolas, monospace" font-size="13" textLength="${shown.length * CELL_W}" lengthAdjust="spacingAndGlyphs" fill="#d4d4d4" xml:space="preserve">${esc(shown)}</text>`
 })
 
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="The terminal while sending: a grid of half blocks, then the sender's two status lines">
 <rect width="${W}" height="${H}" fill="#1e1e1e"/>
 <g fill="#d4d4d4">${rects}</g>
-<rect y="${GRID_ROWS * CELL_H}" width="${W}" height="${2 * CELL_H}" fill="#2a2a2a"/>
 ${statusRows.join('\n')}
 </svg>
 `

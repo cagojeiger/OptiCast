@@ -32,8 +32,6 @@
     }
     set('cmd-curl', `curl -fsSL ${base} | tar xz`)
     set('cmd-run', `./diodecam-${target}/diodecam send ${fileArg()}`)
-    set('cmd-fetch', `curl -fsSLO ${base}\ncurl -fsSLO ${base}.sha256`)
-    set('cmd-verify', `sha256sum -c diodecam-${target}.tar.gz.sha256\ntar xzf diodecam-${target}.tar.gz`)
   }
   // The sender runs on the server, usually Linux: x86_64 stays the default; the last choice is remembered.
   const KEY = 'diodecam.target'
@@ -81,6 +79,7 @@
     showTheme()
   })
   showTheme()
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', showTheme)
   for (const b of /** @type {HTMLButtonElement[]} */ ([...document.querySelectorAll('button.copy')])) {
     b.addEventListener('click', async () => {
       const text = document.getElementById(b.dataset.copy ?? '')?.textContent ?? ''

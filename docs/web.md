@@ -5,7 +5,7 @@
 
 ## 1. 화면
 
-같은 주소가 기기에 따라 다른 화면을 낸다. 마우스가 있는 데스크톱(`(hover: hover) and (pointer: fine)`)은 **설정 페이지**(송신기 설치·다운로드·sha256·`send` 명령·수신기 QR)를, 폰은 **수신기**를 연다. `?receiver=1`이면 데스크톱에서도 수신기(e2e가 쓴다). 설정 페이지는 `setup.js`만 싣고 워커·wasm을 받지 않는다.
+같은 주소가 기기에 따라 다른 화면을 낸다. 마우스가 있는 데스크톱(`(hover: hover) and (pointer: fine)`)은 **설정 페이지**(송신기 다운로드·`send` 명령·터미널 예시·수신기 QR)를, 폰은 **수신기**를 연다. `?receiver=1`이면 데스크톱에서도 수신기(e2e가 쓴다). 설정 페이지는 `setup.js`만 싣고 워커·wasm을 받지 않는다.
 
 수신기는 한 화면, 고정 배치(`DESIGN.md`). 세로(기본): 도구 줄(제목, [송신기 받기] [초기화] [측정값] 아이콘) → 카메라(남는 높이 전부.
 모서리 가이드, 격자를 찾으면 초록 테두리, 받는 중엔 진행 링, 완료하면 ✓) → 파일 이름·크기 → 4 px 진행 막대 →
@@ -123,7 +123,10 @@
 
 | 파일 | 역할 |
 |---|---|
-| `index.html`, `style.css` | 화면(세로·가로 배치) |
+| `index.html`, `style.css` | 화면(수신기 세로·가로 배치, 데스크톱 설정 페이지) |
+| `setup.js` | 설정 페이지: 타깃 선택, 명령 복사, 파일 이름 인용, 테마 버튼 |
+| `help.html`, `privacy.html`, `terms.html`, `licenses.html` | 정적 문서 페이지(영어) |
+| `qr.svg`, `example-terminal.svg`, `icon.svg` | `node tools/qr.ts`, `node tools/terminal-example.ts`, `node tools/icons.ts`가 만든다 |
 | `main.js` | 카메라(rVFC → canvas → Worker), 화면 갱신, 저장·공유, 받은 파일 보관, 이어 받기, 카메라 선택, 진단 |
 | `worker.js` | WASM 수신기를 소유. 프레임마다 정확히 한 번 응답, 예외는 치명 오류 |
 | `wasm.js` | `diodecam.wasm`(C ABI) 래퍼 |

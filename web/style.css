@@ -69,7 +69,6 @@
     --bad: #f87171;
 }
 
-
 * {
   box-sizing: border-box;
 }
@@ -749,7 +748,6 @@ html[data-view='receiver'] #setup {
   grid-template-areas: 'head' 'grid' 'foot';
 }
 
-
 .setup-head {
   grid-area: head;
   display: flex;
@@ -796,7 +794,6 @@ html[data-view='receiver'] #setup {
 .setup a {
   color: var(--link);
 }
-
 
 .setup-grid {
   grid-area: grid;
@@ -970,21 +967,8 @@ html[data-view='receiver'] #setup {
   background: #fff;
 }
 
-
-
-
-
-
-
-
-
-
 .setup-foot a {
   color: var(--muted);
-}
-
-.setup-foot .grow {
-  flex-grow: 1;
 }
 
 /* The picture takes whatever height the card has left and shrinks to fit it. */
@@ -1009,30 +993,29 @@ html[data-view='receiver'] #setup {
 
 .example figcaption {
   flex-shrink: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
 }
 
-/* Short card: no room for the picture at a readable size, so the caption carries it alone. */
+/* Short card: no room for even a small picture, so the caption carries it alone. */
 .card.send {
   container-type: size;
 }
 
-@container (max-height: 380px) {
+@container (max-height: 300px) {
   .example img {
     display: none;
   }
-}
-
-.example figcaption {
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--muted);
 }
 
 .setup-foot {
   grid-area: foot;
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 16px;
+  margin-top: 12px;
   font-size: 12px;
   color: var(--muted);
 }

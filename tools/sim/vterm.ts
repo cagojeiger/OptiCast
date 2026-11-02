@@ -134,10 +134,9 @@ export class VTerm {
     }
   }
 
-  /** One row as text and whether each cell is inverted (status rows are), for drawing it. */
-  line(row: number): { text: string; inverted: boolean[] } {
-    const cells = this.cells.slice(row * this.cols, (row + 1) * this.cols)
-    return { text: cells.map((c) => c.ch).join(''), inverted: cells.map((c) => c.fg < c.bg) }
+  /** One row as text, for drawing the status lines. */
+  line(row: number): string {
+    return this.cells.slice(row * this.cols, (row + 1) * this.cols).map((c) => c.ch).join('')
   }
 
   rasterize(opts: RasterOptions = {}): GrayImage {

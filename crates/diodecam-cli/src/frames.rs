@@ -4,15 +4,18 @@
 //! Output is JSON lines: one header object, then `{"index": f, "ansi": "…"}`
 //! per frame f (counted from the start of the broadcast, so it includes `--skip`).
 //! Frames are what `send` writes per frame, without the one-time ENTER/LEAVE
-//! sequences; the first one written starts with a screen clear.
+//! sequences; the first one written starts with a screen clear. The status lines
+//! are `send`'s too, with the clock at `index / fps` and no measured fps.
 
 use std::fmt::Write as _;
 use std::fs::File;
 use std::io::{BufWriter, Write};
+use std::time::Duration;
 
 use diodecam_core::{ansi, frame, Layout, Profile, SendOptions, Transfer};
 
-use crate::args::{FramesArgs, ProfileArg};
+use crate::args::{FramesArgs, ProfileArg, DEFAULT_FPS};
+use crate::status::{self, Status};
 
 pub fn run(args: &FramesArgs) -> Result<(), String> {
     let shown = args.file.display().to_string();
@@ -55,26 +58,30 @@ pub fn run(args: &FramesArgs) -> Result<(), String> {
     for i in 0..args.count {
         let f = args.skip + i;
         let grid = frame::render(&layout, &tx.next_frame(&layout));
-        let status = [
-            format!(
-                " DiodeCam  {}  id {:08x}  {} {}x{}",
-                ascii(&name),
-                tx.id(),
+        let status = status::lines(
+            &Status {
+                name: &name,
+                size: meta.size,
+                payload: tx.payload_len(),
+                compression: meta.compression,
+                id: tx.id(),
                 profile,
-                layout.width(),
-                layout.height()
-            ),
-            format!(" frame {f}  {} tiles", layout.tiles()),
-        ];
+                grid: Some((layout.width(), layout.height(), layout.tiles())),
+                elapsed: Duration::from_secs_f64(f as f64 / DEFAULT_FPS as f64),
+                source_progress: tx.source_progress(),
+                repair_sent: tx.repair_sent(),
+                source_symbols: tx.source_symbols(),
+                target_fps: DEFAULT_FPS,
+                actual_fps: None,
+                paused: false,
+                notice: None,
+            },
+            cols,
+        );
         let text = ansi::frame(&grid, profile, cols, rows, [&status[0], &status[1]], i == 0);
         writeln!(out, "{{\"index\":{f},\"ansi\":{}}}", json_string(&text)).map_err(io)?;
     }
     out.flush().map_err(io)
-}
-
-/// Printable ASCII only, like the status bar.
-fn ascii(s: &str) -> String {
-    s.chars().map(|c| if (' '..='~').contains(&c) { c } else { '?' }).collect()
 }
 
 /// A JSON string literal: quotes, backslashes and control characters escaped.
