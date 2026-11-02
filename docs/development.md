@@ -27,6 +27,7 @@ pnpm serve                             # http://localhost:5173 에서 수신기 
 node tools/icons.ts                    # web/icon.svg 와 icon-*.png 다시 만들기
 node tools/qr.ts                       # web/qr.svg (수신기 주소 QR, 데스크톱 설정 페이지용) 다시 만들기
 node tools/terminal-example.ts         # web/example-terminal.svg (설정 페이지의 송신 화면 예시, 실제 프레임) 다시 만들기
+node tools/floor.ts [cols] [rows]      # 디코더 바닥: 모듈 px × 블러별 타일 인식률 (vision 변경 전후 비교 기준선)
 ```
 
 rustup 기본 툴체인이 x86_64인 Mac에서는 cargo 앞에 `RUSTUP_TOOLCHAIN=stable-aarch64-apple-darwin
