@@ -11,7 +11,7 @@ import { join, resolve } from 'node:path'
 import { describe, it } from 'node:test'
 import { cameraView, framing, toRgba } from '../tools/sim/camera.ts'
 import { VTerm } from '../tools/sim/vterm.ts'
-import { MIN_MODULE_PX, captureWidth, eta, failure, formatBytes, fps, hint, limitMib, moduleSize, quantile, recognition, safeName, scanWidth, symbolRate, tooLargeText, trim, type FrameSample, type Stage } from '../web/metrics.js'
+import { MIN_MODULE_PX, captureWidth, eta, failure, formatBytes, formatSeconds, fps, hint, limitMib, moduleSize, quantile, recognition, safeName, scanWidth, symbolRate, tooLargeText, trim, type FrameSample, type Stage } from '../web/metrics.js'
 import { evictable, exportTiles, keepable, shouldSave, type KeptFile, type SavedMeta } from '../web/store.js'
 import { OUT_OF_MEMORY, WasmReceiver } from '../web/wasm.js'
 import { randomBytes } from './helpers.ts'
@@ -86,6 +86,7 @@ describe('metrics', () => {
     assert.equal(eta(1100, 3100, rate), 10)
     assert.equal(eta(3200, 3100, rate), 0)
     assert.equal(eta(10, 100, 0), null)
+    assert.equal(formatSeconds(119.5), '2 min 0 s')
     assert.equal(symbolRate([{ t: 0, have: 1 }]), null)
   })
 

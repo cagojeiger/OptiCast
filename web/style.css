@@ -19,7 +19,9 @@
   --warn: #b45309;
   --bad: #b91c1c;
   --camera: #0a0a0a;
+  --on-strip: #ffffff;
   --gutter: 16px;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   font-family: system-ui, -apple-system, 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
@@ -43,6 +45,7 @@
     --done: #34d399;
     --warn: #fbbf24;
     --bad: #f87171;
+    --on-strip: #171717;
   }
 }
 
@@ -67,6 +70,7 @@
     --done: #34d399;
     --warn: #fbbf24;
     --bad: #f87171;
+    --on-strip: #171717;
 }
 
 * {
@@ -344,12 +348,12 @@ h1 span {
 
 .strip[data-state='done'] {
   background: var(--done);
-  color: #ffffff;
+  color: var(--on-strip);
 }
 
 .strip[data-state='error'] {
   background: var(--bad);
-  color: #ffffff;
+  color: var(--on-strip);
 }
 
 .strip .grow {
@@ -473,7 +477,6 @@ select:disabled {
 
 button:focus-visible,
 select:focus-visible,
-summary:focus-visible,
 a:focus-visible {
   outline: 2px solid var(--text);
   outline-offset: 2px;
@@ -564,43 +567,6 @@ a:focus-visible {
   line-height: 1.5;
 }
 
-.label {
-  font-size: 12px !important;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.rows {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.rows li {
-  border-bottom: 1px solid var(--line);
-}
-
-.rows li:last-child {
-  border-bottom: 0;
-}
-
-.rows a {
-  height: 44px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--text);
-  text-decoration: none;
-  font-size: 15px;
-}
-
-.rows a span {
-  color: var(--muted);
-  font-size: 13px;
-  margin-left: auto;
-}
-
 dl {
   margin: 0;
   display: grid;
@@ -627,7 +593,7 @@ dd {
 }
 
 #file-id {
-  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-family: var(--mono);
 }
 
 .field {
@@ -701,9 +667,9 @@ html[data-view='receiver'] #setup {
   display: none;
 }
 
-/* --- sheet code boxes (phone) --------------------------------------------------------- */
+/* --- code boxes: a command and its Copy button (sheets, setup page, policy pages) ------- */
 
-.sheet .code {
+.code {
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -713,25 +679,29 @@ html[data-view='receiver'] #setup {
   padding: 10px 10px 10px 14px;
 }
 
-.sheet .code pre {
+.code pre {
   margin: 0;
   flex-grow: 1;
   min-width: 0;
   overflow-x: auto;
-  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-  font-size: 12px;
+  font-family: var(--mono);
+  font-size: 13px;
   line-height: 1.7;
 }
 
-.sheet .code .copy {
+.code .copy {
   flex-shrink: 0;
   font-size: 13px;
   font-weight: 400;
   border-radius: 8px;
 }
 
+.sheet .code pre {
+  font-size: 12px;
+}
+
 .sheet code {
-  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-family: var(--mono);
   font-size: 12px;
 }
 
@@ -877,7 +847,7 @@ html[data-view='receiver'] #setup {
 }
 
 .setup code {
-  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-family: var(--mono);
   font-size: 13px;
 }
 
@@ -921,7 +891,7 @@ html[data-view='receiver'] #setup {
   background: var(--bg);
   color: var(--text);
   font: inherit;
-  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-family: var(--mono);
   font-size: 13px;
 }
 
@@ -930,31 +900,7 @@ html[data-view='receiver'] #setup {
   outline-offset: 2px;
 }
 
-.setup .code {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 10px 10px 10px 14px;
-}
-
-.setup .code pre {
-  margin: 0;
-  flex-grow: 1;
-  min-width: 0;
-  overflow-x: auto;
-  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-  font-size: 13px;
-  line-height: 1.7;
-}
-
 .setup .code .copy {
-  flex-shrink: 0;
-  font-size: 13px;
-  font-weight: 400;
-  border-radius: 8px;
   min-height: 36px;
 }
 
@@ -1121,24 +1067,14 @@ main.doc ul {
 }
 
 main.doc code {
-  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-family: var(--mono);
   font-size: 13px;
 }
 
 main.doc .code {
+  display: block;
   margin: 0 0 12px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 10px;
   padding: 10px 14px;
-}
-
-main.doc .code pre {
-  margin: 0;
-  overflow-x: auto;
-  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-  font-size: 13px;
-  line-height: 1.7;
 }
 
 main.doc .licenses {

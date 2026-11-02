@@ -509,6 +509,17 @@ function render() {
 
 // --- camera -----------------------------------------------------------------------
 
+/**
+ * getUserMedia failures by DOMException name; any other name shows the browser's own message.
+ * @type {Record<string, string>}
+ */
+const CAMERA_ERRORS = {
+  NotAllowedError: "Camera permission denied. Allow it in Settings › Safari, or in the browser's site settings.",
+  NotFoundError: 'No camera found on this device.',
+  NotReadableError: 'The camera is in use by another app. Close it and try again.',
+  OverconstrainedError: 'This camera cannot give the requested video. Choose another one under Stats.',
+}
+
 async function startCamera() {
   if (starting || scanning) return
   notice = null
@@ -538,7 +549,8 @@ async function startCamera() {
     schedule(loopGen)
   } catch (err) {
     stopCamera()
-    notice = { text: `Could not open the camera: ${/** @type {Error} */ (err).message}`, tone: 'bad' }
+    const { name, message } = /** @type {Error} */ (err)
+    notice = { text: CAMERA_ERRORS[name] ?? `Could not open the camera: ${message}`, tone: 'bad' }
   } finally {
     starting = false
     startBtn.disabled = false
@@ -789,8 +801,9 @@ async function tryResume(id) {
 function onImported(data) {
   if (data.generation !== resetGen) return
   if (data.tiles < 0) {
-    const id = data.stats.meta?.id
-    if (id) store.remove(id).catch(() => {}) // unreadable: drop it
+    // store.load already checked the export, so only memory ran out: keep it for a reload.
+    notice = { text: 'Could not restore the saved progress. Reload to try again.', tone: 'bad' }
+    queueRender()
     return
   }
   resumed = data.tiles

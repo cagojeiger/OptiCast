@@ -234,10 +234,10 @@ export function formatBytes(n) {
 /** @param {number} s */
 export function formatSeconds(s) {
   if (s < 1) return 'under 1 s'
-  if (s < 60) return `${Math.ceil(s)} s`
-  const m = Math.floor(s / 60)
-  const r = Math.ceil(s % 60)
-  return m < 60 ? `${m} min ${r} s` : `${Math.floor(m / 60)} h ${m % 60} min`
+  const t = Math.ceil(s) // whole seconds before splitting, so 119.5 is 2 min 0 s, not 1 min 60 s
+  if (t < 60) return `${t} s`
+  const m = Math.floor(t / 60)
+  return m < 60 ? `${m} min ${t % 60} s` : `${Math.floor(m / 60)} h ${m % 60} min`
 }
 
 /** @param {number} n */

@@ -5,7 +5,18 @@
 
 ## 1. 화면
 
-같은 주소가 기기에 따라 다른 화면을 낸다. 마우스가 있는 데스크톱(`(hover: hover) and (pointer: fine)`)은 **설정 페이지**(송신기 다운로드·`send` 명령·터미널 예시·수신기 QR)를, 폰은 **수신기**를 연다. `?receiver=1`이면 데스크톱에서도 수신기(e2e가 쓴다). 설정 페이지는 `setup.js`만 싣고 워커·wasm을 받지 않는다.
+같은 주소가 기기에 따라 다른 화면을 낸다: 데스크톱은 **설정 페이지**(송신기 다운로드·`send` 명령·터미널 예시·수신기 QR), 폰은 **수신기**.
+설정 페이지는 `setup.js`만 싣고 워커·wasm을 받지 않는다. 화면은 칠하기 전에 `index.html`이 고르고, 나머지 주소 옵션은 `main.js`가 읽는다.
+
+| 조건·주소 옵션 | 효과 |
+|---|---|
+| 마우스가 있는 데스크톱(`(hover: hover) and (pointer: fine)`) | 설정 페이지 |
+| 그 밖(폰), 또는 홈 화면 앱(`display-mode: standalone`, iOS `navigator.standalone`) | 수신기 |
+| `?receiver=1` | 데스크톱에서도 수신기(e2e가 쓴다) |
+| `?max=256` | 받을 파일 상한, MiB(기본 64, 1–512). 넘는 전송의 META는 메모리를 잡기 전에 거부 |
+| `?scan=1920` | 디코더에 넘기는 이미지 폭(기본 영상 폭과 1920 중 작은 값, 64–영상 폭) |
+| `?cap=3840` | 카메라에 요청하는 폭(16:9, 기본 1920, 640–3840). `?scan=`을 같은 값으로 주면 모듈당 픽셀 2배, 처리 약 4배 |
+| `?debug=1` | 카메라 위에 표식과 타일 중심을 찍고, 측정값 시트에 WASM 통계 JSON을 보인다 |
 
 수신기는 한 화면, 고정 배치(`DESIGN.md`). 세로(기본): 도구 줄(제목, [송신기 받기] [초기화] [측정값] 아이콘) → 카메라(남는 높이 전부.
 모서리 가이드, 격자를 찾으면 초록 테두리, 받는 중엔 진행 링, 완료하면 ✓) → 파일 이름·크기 → 4 px 진행 막대 →
@@ -39,7 +50,8 @@
 | [Stop] | `Paused. Start the camera to continue.` |
 | 상한 초과 | `File too large: N MiB > limit 64 MiB (change it with ?max=)` (메모리를 잡기 전에 거부) |
 | 디코더 오류 | 안내 줄 `Decoder error. Reload to resume from the saved progress.` (카메라 정지) |
-| 카메라 불가 | 권한 거부, 또는 HTTPS/localhost가 아님 → 띠 ✕ Error |
+| 카메라 불가 | 띠 ✕ Error와 한 문장: 권한 거부 `Camera permission denied. …`, 카메라 없음 `No camera found on this device.`, 다른 앱이 사용 중 `The camera is in use by another app. …`, 요청한 설정 불가 `This camera cannot give the requested video. …`, HTTPS/localhost가 아님 `The camera is unavailable. …`. 그 밖의 오류는 브라우저의 메시지 |
+| 이어 받기 실패 | 저장분을 불러오다 메모리가 모자라면 띠 ✕ Error, `Could not restore the saved progress. Reload to try again.` 저장분은 지우지 않는다 |
 | 받은 파일이 남음 | 새로고침 뒤: `The file from last time is still here. Save or share it.` + ✓ 띠(받은 시각) |
 
 카메라 위 상태 글은 우선순위가 가장 높은 하나만 보인다: 카메라·공유 실패 > 카메라를 여는 중 > 상한 초과 > 완료(받은 파일) > 정지 > 찾는 중 > 받는 중.
