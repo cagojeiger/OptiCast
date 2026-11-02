@@ -111,6 +111,24 @@ describe('metrics', () => {
   })
 })
 
+describe('page', () => {
+  // The view's module is appended by an inline loader at the end of <body>; without it
+  // neither view runs and nothing reports an error (it slipped once).
+  const html = readFileSync(resolve('web/index.html'), 'utf8')
+  it('loads one module per view, after the markup', () => {
+    const body = html.slice(html.indexOf('<body>'), html.indexOf('</body>'))
+    const loader = body.lastIndexOf("'./main.js?v=__V__'")
+    assert.ok(loader > body.indexOf('<section id="setup"'), 'the loader comes after the setup section')
+    assert.ok(body.includes("'./setup.js?v=__V__'"), 'the setup module is named')
+    assert.ok(!html.includes('<script type="module"'), 'no static module tag, the loader picks one')
+  })
+  it('decides the view before paint', () => {
+    const head = html.slice(0, html.indexOf('</head>'))
+    assert.ok(head.includes("dataset.view ="), 'data-view is set in the head')
+    assert.ok(head.includes("get('receiver') === '1'"), '?receiver=1 forces the receiver')
+  })
+})
+
 describe('URL options', () => {
   it('?scan= is an integer clamped to [64, video width]', () => {
     assert.equal(scanWidth(null, 1920), 1920)
