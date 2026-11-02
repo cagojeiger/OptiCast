@@ -259,24 +259,12 @@ impl Sender {
     }
 
     fn status(&self) -> Status<'_> {
-        let t = &self.transfer;
-        let meta = t.meta();
         Status {
-            name: &meta.filename,
-            size: meta.size,
-            payload: t.payload_len(),
-            compression: meta.compression,
-            id: t.id(),
-            profile: self.profile,
-            grid: self.layout.as_ref().ok().map(|l| (l.width(), l.height(), l.tiles())),
             elapsed: self.started.elapsed(),
-            source_progress: t.source_progress(),
-            repair_sent: t.repair_sent(),
-            source_symbols: t.source_symbols(),
-            target_fps: self.fps,
             actual_fps: self.meter.fps(),
             paused: self.paused,
             notice: self.notice_until.filter(|&t| Instant::now() < t).map(|_| PHASE_LOCK_NOTICE),
+            ..Status::for_transfer(&self.transfer, self.profile, self.layout.as_ref().ok(), self.fps)
         }
     }
 

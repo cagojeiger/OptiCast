@@ -5,7 +5,7 @@ use std::time::Duration;
 use diodecam_core::meta::Compression;
 use diodecam_core::sender::{data_tiles_per_frame, view_seconds};
 use diodecam_core::tile::CONTENT_BYTES;
-use diodecam_core::Profile;
+use diodecam_core::{Layout, Profile, Transfer};
 
 /// What the status bar shows; the sender fills it in every frame.
 pub struct Status<'a> {
@@ -27,6 +27,32 @@ pub struct Status<'a> {
     pub paused: bool,
     /// Shown in place of the key hints, e.g. the 30-fps phase-lock hint.
     pub notice: Option<&'a str>,
+}
+
+impl Status<'_> {
+    /// The transfer-derived fields (the META name, as `send` shows it); the clock
+    /// starts at zero, with no measured fps, not paused and no notice. Callers set
+    /// their own fields with struct-update syntax.
+    pub fn for_transfer<'a>(tx: &'a Transfer, profile: Profile, layout: Option<&Layout>, fps: u32) -> Status<'a> {
+        let meta = tx.meta();
+        Status {
+            name: &meta.filename,
+            size: meta.size,
+            payload: tx.payload_len(),
+            compression: meta.compression,
+            id: tx.id(),
+            profile,
+            grid: layout.map(|l| (l.width(), l.height(), l.tiles())),
+            elapsed: Duration::ZERO,
+            source_progress: tx.source_progress(),
+            repair_sent: tx.repair_sent(),
+            source_symbols: tx.source_symbols(),
+            target_fps: fps,
+            actual_fps: None,
+            paused: false,
+            notice: None,
+        }
+    }
 }
 
 /// Both lines, each at most `cols − 1` characters. When they do not fit, the
