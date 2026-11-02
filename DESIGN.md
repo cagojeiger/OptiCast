@@ -27,7 +27,7 @@ only (`tools/icons.ts`): the icon is identity; green on the page is a status sig
 | Receive a file with one hand while watching a terminal | Everything fits in iPhone SE Safari's 375×553 without scrolling; the thumb never hunts for a button |
 | The phone is the receiver, the desktop is the setup | A desktop visitor sees install steps, downloads and a QR; a phone visitor sees the camera |
 | Nothing moves | Controls keep position and size across every state; only fill, text and enablement change |
-| Four steps, nothing else | Server on the left (Download, Send), phone on the right (Open the receiver, Receive). Each card is a title, the action and a sentence or two; everything else is on help.html |
+| Four steps, nothing else | Server on the left (Download, Send), phone on the right (Open the receiver, Receive). Each card is a title, the action and a sentence or two; the two step-1 questions go to help.html |
 
 Non-goals: a desktop camera receiver; a general file manager; any upload.
 
@@ -57,8 +57,8 @@ Desktop (pointer: fine, hover: hover) — one screen: the four cards fill the he
          2 Send                 file field · send command · Copy · a real frame as the picture
   right  3 Open the receiver    QR · one sentence                           (the phone)
          4 Receive              two sentences
-  foot   version · Help · Privacy · Terms · Licenses
-help.html holds everything else: air-gapped import, macOS quarantine, keys and folders, phone notes, storage.
+  foot   version · Privacy · Terms · Licenses
+help.html answers the two step-1 questions only: air-gapped import, macOS quarantine.
 ```
 
 ## Design principles

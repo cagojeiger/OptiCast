@@ -18,7 +18,7 @@
     <main class="doc">
       <p class="crumbs"><a href="./">DiodeCam</a> · Help</p>
       <h1>Help</h1>
-      <p class="lede">What the four steps leave out. The commands below use the Linux x86_64 build; swap the target name for yours.</p>
+      <p class="lede">The two questions under step 1. The commands use the Linux x86_64 build; swap the target name for yours.</p>
 
       <h2 id="air-gapped">Air-gapped server</h2>
       <p>Fetch the archive and its checksum where there is internet, move both through your organisation's approved import path, then verify and unpack on the server.</p>
@@ -30,24 +30,6 @@ tar xzf diodecam-x86_64-unknown-linux-musl.tar.gz</pre></div>
       <h2 id="macos">macOS: "cannot be opened"</h2>
       <p>A browser download carries a quarantine mark and macOS refuses an unsigned binary. <code>curl</code> adds no mark, so the one-line download works as is. For a browser download, remove the mark once:</p>
       <div class="code"><pre>xattr -d com.apple.quarantine ./diodecam-aarch64-apple-darwin/diodecam</pre></div>
-
-      <h2 id="sending">While sending</h2>
-      <ul>
-        <li>Keys: <code>+</code> / <code>-</code> change the frame rate, <code>space</code> pauses, <code>q</code> quits.</li>
-        <li>A larger terminal is faster: at 200×55, 1 MiB takes about 26 s. Resizing mid-transfer is fine; the phone keeps going.</li>
-        <li>The link is one-way. The sender cannot tell how far the phone is; the phone shows its own progress.</li>
-        <li>Folders: pack them first, <code>tar czf docs.tgz docs/</code>. Files over 64 MiB need <code>--max-bytes</code>.</li>
-        <li><code>diodecam -V</code> prints the version, <code>-h</code> the options.</li>
-      </ul>
-
-      <h2 id="phone">On the phone</h2>
-      <ul>
-        <li>Safari: Share → Add to Home Screen. The receiver then opens like an app and works offline.</li>
-        <li>Hold the phone sideways for a larger grid. The corner guides turn green while the grid is being read.</li>
-        <li>If it struggles, open ⓘ: "Stuck at" names the stage, and Copy diagnostics gives the numbers. On an iPhone Pro, choose "Back Camera" (one lens) to stop the automatic lens switch.</li>
-        <li>A closed tab keeps an unfinished transfer for 7 days and the received file until it is shared or replaced, a day at most. Reset clears the current one.</li>
-        <li>The receiver uploads nothing and never opens the file; it is saved only when you tap Share or Download. <a href="./?receiver=1">Open the receiver on this computer ›</a></li>
-      </ul>
 
       <p class="muted">Last reviewed 2026-11-02 · <a href="./privacy.html">Privacy</a> · <a href="./terms.html">Terms</a> · <a href="./licenses.html">Licenses</a></p>
     </main>
