@@ -42,14 +42,14 @@
 | 시작 전 | 가이드, 안내 | ○ Idle | Start (주) | 비활성 | 비활성 | 비활성 |
 | 받는 중 | 영상, 테두리, 링 | ● Receiving | Stop | 비활성 | 비활성 | 활성 |
 | 완료 | ✓ | ✓ Received · SHA-256 verified | Start | 활성 | 활성 (주, 공유 시트가 파일을 받을 때) | 활성 |
-| 오류 | 가이드 | ✕ Error | Start | 받은 파일 있으면 | 받은 파일 있으면 | 활성 |
+| 오류 | 가이드 | ✕ Error | Start (디코더 오류면 Reload) | 받은 파일 있으면 | 받은 파일 있으면 | 활성 |
 
 | 상황 | 표시 |
 |---|---|
 | 검증 실패 | 안내 줄 `Verification failed, collecting again`, 저장분을 버리고 다시 모은다 |
 | [Stop] | `Paused. Start the camera to continue.` |
 | 상한 초과 | `File too large: N MiB > limit 64 MiB (change it with ?max=)` (메모리를 잡기 전에 거부) |
-| 디코더 오류 | 안내 줄 `Decoder error. Reload to resume from the saved progress.` (카메라 정지) |
+| 디코더 오류 | 띠 ✕ Error와 `Decoder error. Reload to resume from the saved progress.` (카메라 정지, 여는 중이던 카메라는 켜지 않는다). Start 자리의 버튼이 **Reload**가 된다(홈 화면 앱에는 새로고침 단추가 없다) |
 | 카메라 불가 | 띠 ✕ Error와 한 문장: 권한 거부 `Camera permission denied. …`, 카메라 없음 `No camera found on this device.`, 다른 앱이 사용 중 `The camera is in use by another app. …`, 요청한 설정 불가 `This camera cannot give the requested video. …`, HTTPS/localhost가 아님 `The camera is unavailable. …`. 그 밖의 오류는 브라우저의 메시지 |
 | 이어 받기 실패 | 저장분을 불러오다 메모리가 모자라면 카메라 위에 주황 글 `Could not restore the saved progress. Collecting again; reload to retry.` 받기는 계속되고 띠는 ● Receiving 그대로다. 저장분은 지우지 않는다 |
 | 받은 파일이 남음 | 새로고침 뒤: `The file from last time is still here. Save or share it.` + ✓ 띠(받은 시각) |

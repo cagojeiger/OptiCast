@@ -152,7 +152,10 @@ describe('view', () => {
       ['error', state({ notice: { text: 'No camera found on this device.', tone: 'bad' } }), 'error', ['start', 'reset'], [], false, false],
       ['error, kept file', state({ notice: { text: 'x', tone: 'bad' }, offer: offer() }), 'error', ['start', 'download', 'share', 'reset'], ['share'], false, false],
       ['opening the camera', state({ starting: true }), 'idle', [], ['start'], false, false],
-      ['decoder gone', state({ fatal: 'Decoder error.', stats: stats(40, 100) }), 'error', ['reset'], [], false, false],
+      // Start becomes Reload: the only way back, and the home-screen app has no reload control.
+      ['decoder gone', state({ fatal: 'Decoder error.', stats: stats(40, 100) }), 'error', ['start', 'reset'], ['start'], false, false],
+      ['decoder gone while opening', state({ fatal: 'Decoder error.', starting: true }), 'error', ['start', 'reset'], ['start'], false, false],
+      ['decoder gone, kept file', state({ fatal: 'Decoder error.', offer: offer(false) }), 'error', ['start', 'download', 'reset'], ['download'], false, false],
     ]
     for (const [name, s, strip, on, primaries, ring, tick] of table) {
       const v = view(s)
@@ -162,6 +165,7 @@ describe('view', () => {
       assert.equal(v.ring, ring, `${name}: ring`)
       assert.equal(v.tick, tick, `${name}: tick`)
       assert.equal(v.prompt, !tick, `${name}: prompt`)
+      assert.equal(v.buttons.start.label, s.fatal ? 'Reload' : s.scanning ? 'Stop' : 'Start', `${name}: start label`)
     }
   })
 

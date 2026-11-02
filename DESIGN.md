@@ -123,9 +123,11 @@ the receiver (used by the e2e in desktop Chrome).
 | Idle | guides, prompt | ○ gray | Start (primary) | disabled | disabled | disabled |
 | Receiving | video, outline, ring | ● inverted | Stop (secondary) | disabled | disabled | enabled |
 | Done | ✓ disc | ✓ green | Start (secondary) | enabled | enabled (primary) | enabled |
-| Error | guides | ✕ red | Start (secondary) | by kept file | by kept file | enabled |
+| Error | guides | ✕ red | Start (secondary); Reload when the decoder is gone | by kept file | by kept file | enabled |
 
-Reset asks once when an unsaved file exists.
+Reset asks once when an unsaved file exists. When the decoder is gone only a reload helps (it resumes
+from the saved progress), so Start becomes Reload in the same place, primary unless a kept file is on
+offer: the home-screen app has no reload control.
 
 ## Content voice
 

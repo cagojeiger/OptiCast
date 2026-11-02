@@ -34,7 +34,7 @@ import { HINT_TEXT, formatSeconds, fps, hint, quantile, recognition, thousands, 
  * @property {{ text: string, tone: 'ok' | 'warn' | 'bad' | '' }} status The line over the camera.
  * @property {{ text: string, tone: 'ok' | 'warn' | '' }} hint The line under the strip.
  * @property {{
- *   start: { label: 'Start' | 'Stop', enabled: boolean, primary: boolean },
+ *   start: { label: 'Start' | 'Stop' | 'Reload', enabled: boolean, primary: boolean },
  *   download: { enabled: boolean, primary: boolean },
  *   share: { enabled: boolean, primary: boolean },
  *   reset: { enabled: boolean },
@@ -82,7 +82,10 @@ export function view(v) {
 
   const canShare = !!offer && offer.canShare
   const buttons = {
-    start: { label: v.scanning ? /** @type {const} */ ('Stop') : /** @type {const} */ ('Start'), enabled: !v.starting && !v.fatal, primary: !v.scanning && !offer && !error },
+    // The decoder is gone: Start becomes Reload in the same place (the home-screen app has no reload control).
+    start: v.fatal
+      ? { label: /** @type {const} */ ('Reload'), enabled: true, primary: !offer }
+      : { label: v.scanning ? /** @type {const} */ ('Stop') : /** @type {const} */ ('Start'), enabled: !v.starting, primary: !v.scanning && !offer && !error },
     download: { enabled: !!offer && !receiving, primary: !!offer && !canShare },
     share: { enabled: canShare && !receiving, primary: canShare },
     reset: { enabled: !!offer || !!s?.meta || v.scanning || error },

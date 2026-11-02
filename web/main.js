@@ -363,6 +363,9 @@ function queueRender() {
   })
 }
 
+/** Start's icon by its label: play, stop, and the reset arrow for Reload. */
+const START_ICON = { Start: 'M7 4l13 8-13 8z', Stop: 'M5 5h14v14H5z', Reload: 'M3 12a9 9 0 1 0 3-6.7M3 4v5h5' }
+
 function render() {
   const s = last
   const capture = fps(captureTimes)
@@ -449,7 +452,9 @@ function render() {
   startLabel.textContent = start.label
   startBtn.disabled = !start.enabled
   startBtn.classList.toggle('primary', start.primary)
-  startBtn.querySelector('svg')?.replaceChildren(pathEl(start.label === 'Stop' ? 'M5 5h14v14H5z' : 'M7 4l13 8-13 8z'))
+  const startIcon = startBtn.querySelector('svg')
+  startIcon?.classList.toggle('fill', start.label !== 'Reload') // the reload arrow is a stroke
+  startIcon?.replaceChildren(pathEl(START_ICON[start.label]))
   downloadBtn.disabled = !download.enabled
   downloadBtn.classList.toggle('primary', download.primary)
   shareBtn.disabled = !share.enabled
@@ -478,7 +483,7 @@ const CAMERA_ERRORS = {
 }
 
 async function startCamera() {
-  if (starting || scanning) return
+  if (starting || scanning || fatalError) return
   notice = null
   if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
     notice = { text: 'The camera is unavailable. Open the page over HTTPS or on localhost.', tone: 'bad' }
@@ -488,13 +493,21 @@ async function startCamera() {
   if (last?.done) reset() // a finished transfer is not resumed: start a new receive
   starting = true
   queueRender()
+  // stopCamera() bumps loopGen: if the decoder dies while the camera opens, the camera must not start.
+  const gen = loopGen
   try {
-    stream = await openCamera(readCamera())
+    const opened = await openCamera(readCamera())
+    if (gen !== loopGen) {
+      opened.getTracks().forEach((t) => t.stop())
+      return
+    }
+    stream = opened
     const track = stream.getVideoTracks()[0]
     settings = track?.getSettings() ?? {}
     lens = track?.label ?? ''
     video.srcObject = stream
     await video.play()
+    if (gen !== loopGen) return // stopped meanwhile; stopCamera() released the stream
     loopGen++ // never two capture chains
     scanning = true
     viewer.classList.add('live')
@@ -504,6 +517,7 @@ async function startCamera() {
     void listCameras()
     schedule(loopGen)
   } catch (err) {
+    if (gen !== loopGen) return // stopped meanwhile (play() is aborted): not a camera error
     stopCamera()
     const { name, message } = /** @type {Error} */ (err)
     notice = { text: CAMERA_ERRORS[name] ?? `Could not open the camera: ${message}`, tone: 'bad' }
@@ -799,7 +813,8 @@ function reset() {
   queueRender()
 }
 
-startBtn.addEventListener('click', () => (scanning ? (stopCamera(), queueRender()) : void startCamera()))
+// Start · Stop, or Reload once the decoder is gone (a reload resumes from the saved progress).
+startBtn.addEventListener('click', () => (fatalError ? location.reload() : scanning ? (stopCamera(), queueRender()) : void startCamera()))
 // Start over: the collected tiles and the kept file both go.
 resetBtn.addEventListener('click', () => {
   if (offer && !offer.saved && !confirm('The received file is not saved yet. Discard it?')) return
