@@ -4,7 +4,7 @@
 //!
 //! Calling convention (all integers are 32-bit on wasm32):
 //! - `alloc(len) -> ptr` / `dealloc(ptr, len)`: buffers the host writes into.
-//! - `receiver_new() -> handle` (0 = failure), `receiver_free(handle)`, `receiver_reset(handle)`.
+//! - `receiver_new() -> handle` (never 0), `receiver_free(handle)`, `receiver_reset(handle)`.
 //! - `receiver_process(handle, ptr, len, width, height) -> i32`: one RGBA frame;
 //!   returns the tiles that passed in this frame, or −1 when no grid was found
 //!   (−2 for bad arguments).
@@ -31,7 +31,6 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::fmt::Write as _;
 
-use diodecam_core::receiver::DEFAULT_MAX_FILE;
 use diodecam_core::tile::{self, Tile, TileKind, DATA_BYTES};
 use diodecam_core::{frame, Accepted, Assembler, Layout};
 use diodecam_vision::{luma_rgba, Detection, Point, Polarity, Stage, Vision};
@@ -52,8 +51,6 @@ pub struct Receiver {
     file: Option<Vec<u8>>,
     error: Option<String>,
     debug: bool,
-    /// Largest file accepted, in bytes (survives `reset`).
-    limit: u64,
     /// META (once) plus every DATA tile given to the assembler, for export.
     kept: Vec<Tile>,
     kept_ids: HashSet<(u16, u8, u32)>,
@@ -99,7 +96,6 @@ impl Receiver {
             file: None,
             error: None,
             debug: false,
-            limit: DEFAULT_MAX_FILE,
             kept: Vec::new(),
             kept_ids: HashSet::new(),
             kept_meta: false,
@@ -207,15 +203,14 @@ impl Receiver {
     }
 
     pub fn reset(&mut self) {
-        let (debug, limit) = (self.debug, self.limit);
+        let (debug, limit) = (self.debug, self.assembler.limit());
         *self = Receiver::new();
         self.debug = debug;
         self.set_limit(limit);
     }
 
-    /// Largest file accepted, in bytes.
+    /// Largest file accepted, in bytes (survives `reset`).
     pub fn set_limit(&mut self, bytes: u64) {
-        self.limit = bytes;
         self.assembler.set_limit(bytes);
     }
 
@@ -316,7 +311,7 @@ impl Receiver {
             }
             None => j.push_str(",\"meta\":null"),
         }
-        let _ = write!(j, ",\"limit\":{},\"too_large_count\":{}", self.limit, s.too_large);
+        let _ = write!(j, ",\"limit\":{},\"too_large_count\":{}", self.assembler.limit(), s.too_large);
         match self.assembler.refused() {
             Some((id, size)) => {
                 let _ = write!(j, ",\"too_large\":{{\"id\":\"{id:08x}\",\"size\":{size}}}");
@@ -520,7 +515,10 @@ pub extern "C" fn receiver_set_limit(handle: u32, mib: u32) {
 /// Processes one RGBA frame of `width`×`height` at `ptr` (`len` bytes).
 ///
 /// # Safety
-/// `ptr` must point to `len` readable bytes (e.g. from `alloc`) for the duration of the call.
+/// `ptr` must point to `len` initialized bytes (e.g. an `alloc` buffer the host has
+/// filled; `alloc` itself returns uninitialized memory) for the duration of the call,
+/// and not into a buffer this module returned (`receiver_stats`/`receiver_file`/
+/// `receiver_export`), which the call may replace or free.
 #[no_mangle]
 pub unsafe extern "C" fn receiver_process(handle: u32, ptr: *const u8, len: usize, width: u32, height: u32) -> i32 {
     if ptr.is_null() {
@@ -565,7 +563,10 @@ pub extern "C" fn receiver_export(handle: u32) -> *const u8 {
 /// Feeds an export back in.
 ///
 /// # Safety
-/// `ptr` must point to `len` readable bytes for the duration of the call.
+/// `ptr` must point to `len` initialized bytes (e.g. an `alloc` buffer the host has
+/// filled; `alloc` itself returns uninitialized memory) for the duration of the call,
+/// and not into a buffer this module returned (`receiver_stats`/`receiver_file`/
+/// `receiver_export`), which the call may replace or free.
 #[no_mangle]
 pub unsafe extern "C" fn receiver_import(handle: u32, ptr: *const u8, len: usize) -> i32 {
     if ptr.is_null() {
@@ -789,12 +790,12 @@ mod tests {
     fn limit_is_clamped_and_survives_reset() {
         let h = receiver_new();
         receiver_set_limit(h, 0);
-        assert_eq!(with(h, |rx| rx.limit), Some(1 << 20));
+        assert_eq!(with(h, |rx| rx.assembler.limit()), Some(1 << 20));
         receiver_set_limit(h, u32::MAX);
-        assert_eq!(with(h, |rx| rx.limit), Some(1024 << 20));
+        assert_eq!(with(h, |rx| rx.assembler.limit()), Some(1024 << 20));
         receiver_set_limit(h, 8);
         receiver_reset(h);
-        assert_eq!(with(h, |rx| (rx.limit, rx.assembler.limit())), Some((8 << 20, 8 << 20)));
+        assert_eq!(with(h, |rx| rx.assembler.limit()), Some(8 << 20));
         receiver_free(h);
     }
 

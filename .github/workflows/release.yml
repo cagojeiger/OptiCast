@@ -1,6 +1,8 @@
 # Pushing a tag vX.Y.Z builds the `diodecam` sender for Linux (static musl) and
-# macOS and attaches them to a GitHub release. Asset names carry no version, so
-# .../releases/latest/download/diodecam-<target>.tar.gz always works.
+# macOS and attaches them to a GitHub release once the tagged commit passes the
+# tests (cargo test, typecheck, the wasm build and the JS tests, as in ci.yml).
+# Asset names carry no version, so .../releases/latest/download/diodecam-<target>.tar.gz
+# always works.
 name: Release
 
 on:
@@ -11,6 +13,27 @@ permissions:
   contents: read
 
 jobs:
+  # Runs beside the builds; the release waits for both.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: cargo test --workspace --release --locked
+      # The receiver test replays frames from the built sender through the built wasm.
+      - run: pnpm wasm
+      - run: pnpm test
+
   build:
     strategy:
       fail-fast: false
@@ -43,7 +66,7 @@ jobs:
           path: diodecam-${{ matrix.target }}.tar.gz*
 
   release:
-    needs: build
+    needs: [test, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write

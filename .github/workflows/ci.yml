@@ -15,9 +15,10 @@ on:
 permissions:
   contents: read
 
-# One run per branch at a time, in push order, so pushes deploy in the order they were made
-# (re-running an old run deploys that old commit again). A new push to a pull request
-# cancels its running checks.
+# One run per branch at a time: a push to main waits for the running deploy, but GitHub keeps
+# only the newest waiting run, so a waiting run is cancelled when a newer push arrives and only
+# the newest commit deploys (re-running an old run deploys that old commit again). A new push
+# to a pull request cancels its running checks.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -38,22 +39,25 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --release --locked -- -D warnings
       - run: cargo test --workspace --release --locked
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm typecheck
       # The receiver test replays frames from the built sender through the built wasm.
       - run: pnpm wasm
       - run: pnpm test
 
+      # Every run assembles the site, so a pull request that breaks it fails before main.
       - name: Assemble the site
-        if: github.ref == 'refs/heads/main'
         run: |
           mkdir _site
           cp web/*.html web/*.css web/*.js web/*.webmanifest web/*.png web/*.svg web/diodecam.wasm _site/
           # __VERSION__ is the release (Cargo.toml), __V__ the commit (cache name, URL versions).
-          sed -i "s/__VERSION__/$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)/g; s/__V__/${GITHUB_SHA::7}/g" _site/*.html _site/*.css _site/*.js _site/*.webmanifest
+          v=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          test -n "$v"
+          sed -i "s/__VERSION__/$v/g; s/__V__/${GITHUB_SHA::7}/g" _site/*.html _site/*.css _site/*.js _site/*.webmanifest
+          if grep -rlI '__V__\|__VERSION__' _site; then echo 'placeholders left in the files above' >&2; exit 1; fi
       - if: github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v5
         with:

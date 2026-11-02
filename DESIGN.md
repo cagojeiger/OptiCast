@@ -2,8 +2,8 @@
 
 ## Source of truth
 
-- Status: Active · 2026-11-02. The tokens are shipped; the layout, components, desktop page and
-  English copy below are the target that the next changes implement.
+- Status: Active · 2026-11-02. The tokens, layout, components, desktop page and English copy
+  below are what `web/` ships.
 - Scope: the receiver page (`web/`) on phones and the setup page on desktops. The sender CLI's
   terminal output is specified in `docs/cli.md`.
 - Tokens: `web/style.css` `:root` is the canonical value of every color and spacing token. This
@@ -76,7 +76,7 @@ help.html answers the two step-1 questions only: air-gapped import, macOS quaran
 
 Neutral gray ramp (Tailwind `neutral`, MIT) in two modes. The system setting applies unless the
 person picks Light or Dark on the desktop page (stored, applied before paint, honoured by the
-receiver too); Auto clears the choice. System sans for UI, `ui-monospace` for commands. Sizes 13 / 15 / 16 / 17 on
+receiver too); Auto clears the choice. System sans for UI, `ui-monospace` (`mono`) for commands. Sizes 13 / 15 / 16 / 17 on
 the phone, 14 / 15 / 18 / 26 on the desktop. Spacing on an 8 px grid (4 for hairlines). Radii: 4
 progress bar · 8 status strip, icon buttons · 10 buttons, inputs, code · 12 camera, cards · 16
 sheet top · full circle only for the ring, step badges and pills. No shadows: a sheet dims what is
@@ -85,7 +85,8 @@ keyboard focus and the detected-grid outline.
 
 Roles (values in `web/style.css`): `bg`, `panel`, `surface`, `line`, `text`, `text-2`, `muted`,
 `disabled`, `link`, `invert-bg`/`invert-text` (primary action and the receiving strip), `secondary`,
-`signal` (green on the camera), `done`, `warn`, `bad`, `camera`.
+`signal` (green on the camera), `done`, `warn`, `bad`, `on-strip` (text on the done and error strips),
+`camera`, `mono` (the monospace stack).
 
 ## Components
 

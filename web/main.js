@@ -148,6 +148,12 @@ let fatalError = ''
  */
 let notice = null
 /**
+ * The saved progress could not be imported (only out of memory). Reception goes on, so it is a
+ * warning, not an error; it goes once new progress is saved or the file completes.
+ * @type {{ text: string, tone: 'warn' }}
+ */
+const RESTORE_FAILED = { text: 'Could not restore the saved progress. Collecting again; reload to retry.', tone: 'warn' }
+/**
  * The verified file on offer; `restored` when it came back from IndexedDB after a
  * reload, `saved` once downloaded or shared.
  * @type {{ url: string, name: string, file: File, id: string, at: number, restored: boolean, saved: boolean } | null}
@@ -509,6 +515,17 @@ function render() {
 
 // --- camera -----------------------------------------------------------------------
 
+/**
+ * getUserMedia failures by DOMException name; any other name shows the browser's own message.
+ * @type {Record<string, string>}
+ */
+const CAMERA_ERRORS = {
+  NotAllowedError: "Camera permission denied. Allow it in Settings › Safari, or in the browser's site settings.",
+  NotFoundError: 'No camera found on this device.',
+  NotReadableError: 'The camera is in use by another app. Close it and try again.',
+  OverconstrainedError: 'This camera cannot give the requested video. Choose another one under Stats.',
+}
+
 async function startCamera() {
   if (starting || scanning) return
   notice = null
@@ -538,7 +555,8 @@ async function startCamera() {
     schedule(loopGen)
   } catch (err) {
     stopCamera()
-    notice = { text: `Could not open the camera: ${/** @type {Error} */ (err).message}`, tone: 'bad' }
+    const { name, message } = /** @type {Error} */ (err)
+    notice = { text: CAMERA_ERRORS[name] ?? `Could not open the camera: ${message}`, tone: 'bad' }
   } finally {
     starting = false
     startBtn.disabled = false
@@ -634,6 +652,7 @@ function finish(file, s) {
   const id = s.meta?.id ?? ''
   const blob = new Blob([file], { type: 'application/octet-stream' })
   stopCamera()
+  if (notice === RESTORE_FAILED) notice = null // the file is here; nothing is left to restore
   const at = Date.now()
   show(blob, name, id, at, false)
   if (s.meta) store.remove(s.meta.id).catch(() => {})
@@ -789,8 +808,9 @@ async function tryResume(id) {
 function onImported(data) {
   if (data.generation !== resetGen) return
   if (data.tiles < 0) {
-    const id = data.stats.meta?.id
-    if (id) store.remove(id).catch(() => {}) // unreadable: drop it
+    // store.load already checked the export, so only memory ran out: keep it for a reload.
+    notice = RESTORE_FAILED
+    queueRender()
     return
   }
   resumed = data.tiles
@@ -814,6 +834,11 @@ async function saveProgress(id, tiles, count) {
     const stored = await store.info(id)
     if (gen !== resetGen || !store.shouldSave(stored, count)) return
     await store.save({ id, name: meta.name, size: meta.size, savedAt: Date.now(), data: tiles })
+    // The new progress replaced the entry that could not be restored.
+    if (notice === RESTORE_FAILED) {
+      notice = null
+      queueRender()
+    }
   } catch (err) {
     console.warn('saving progress failed', err)
   }

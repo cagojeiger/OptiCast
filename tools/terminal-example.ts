@@ -5,7 +5,7 @@
 //
 // usage: node tools/terminal-example.ts   (needs cargo; writes web/example-terminal.svg)
 
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { cargo } from './cargo.ts'
@@ -18,12 +18,17 @@ const CELL_W = 8
 const CELL_H = 16
 
 const dir = mkdtempSync(join(tmpdir(), 'diodecam-example-'))
-const input = join(dir, 'report.pdf')
-writeFileSync(input, randomBytes(24_000, 11))
-const out = join(dir, 'frames.jsonl')
-cargo(['run', '-q', '-p', 'diodecam-cli', '--', 'frames', input, '--cols', `${COLS}`, '--rows', `${ROWS}`, '--skip', '70', '--count', '1', '--out', out])
-// JSON lines: a header object first, then one object per frame.
-const frame = JSON.parse(readFileSync(out, 'utf8').split('\n').filter((l) => l.trim())[1]!) as { ansi: string }
+let frame: { ansi: string }
+try {
+  const input = join(dir, 'report.pdf')
+  writeFileSync(input, randomBytes(24_000, 11))
+  const out = join(dir, 'frames.jsonl')
+  cargo(['run', '-q', '-p', 'diodecam-cli', '--', 'frames', input, '--cols', `${COLS}`, '--rows', `${ROWS}`, '--skip', '70', '--count', '1', '--out', out])
+  // JSON lines: a header object first, then one object per frame.
+  frame = JSON.parse(readFileSync(out, 'utf8').split('\n').filter((l) => l.trim())[1]!) as { ansi: string }
+} finally {
+  rmSync(dir, { recursive: true, force: true })
+}
 
 // Replay the real ANSI bytes; then read the terminal back as pixels (one cell = 8×16,
 // `▀` lights the top half) and draw each half-cell as a rect.

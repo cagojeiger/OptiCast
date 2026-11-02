@@ -1,7 +1,7 @@
 // The receiver (web/): the screen's rolling metrics, the resume store's pure
 // rules, and the WebAssembly receiver fed with real sender frames through the
 // terminal and camera simulators. The wasm test needs `pnpm wasm` and a built
-// `diodecam` binary; it is skipped (with a note) when they are missing.
+// `diodecam` binary; locally it is skipped (with a note) when they are missing, in CI it fails.
 
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
@@ -11,7 +11,7 @@ import { join, resolve } from 'node:path'
 import { describe, it } from 'node:test'
 import { cameraView, framing, toRgba } from '../tools/sim/camera.ts'
 import { VTerm } from '../tools/sim/vterm.ts'
-import { MIN_MODULE_PX, captureWidth, eta, failure, formatBytes, fps, hint, limitMib, moduleSize, quantile, recognition, safeName, scanWidth, symbolRate, tooLargeText, trim, type FrameSample, type Stage } from '../web/metrics.js'
+import { MIN_MODULE_PX, captureWidth, eta, failure, formatBytes, formatSeconds, fps, hint, limitMib, moduleSize, quantile, recognition, safeName, scanWidth, symbolRate, tooLargeText, trim, type FrameSample, type Stage } from '../web/metrics.js'
 import { evictable, exportTiles, keepable, shouldSave, type KeptFile, type SavedMeta } from '../web/store.js'
 import { OUT_OF_MEMORY, WasmReceiver } from '../web/wasm.js'
 import { randomBytes } from './helpers.ts'
@@ -86,6 +86,7 @@ describe('metrics', () => {
     assert.equal(eta(1100, 3100, rate), 10)
     assert.equal(eta(3200, 3100, rate), 0)
     assert.equal(eta(10, 100, 0), null)
+    assert.equal(formatSeconds(119.5), '2 min 0 s')
     assert.equal(symbolRate([{ t: 0, have: 1 }]), null)
   })
 
@@ -191,9 +192,9 @@ describe('page', () => {
     const chosen = tokens(":root[data-theme='dark']")
     assert.deepEqual(chosen, system, 'a chosen dark theme is the system dark theme')
     for (const t of system.keys()) assert.ok(light.has(t), `${t} is defined for dark mode only`)
-    // Not tied to a mode: the one signal hue, the always-dark camera box, a length.
+    // Not tied to a mode: the one signal hue, the always-dark camera box, a length, a font stack.
     const shared = [...light.keys()].filter((t) => !system.has(t)).sort()
-    assert.deepEqual(shared, ['--camera', '--gutter', '--signal'], 'a new light token needs a dark value')
+    assert.deepEqual(shared, ['--camera', '--gutter', '--mono', '--signal'], 'a new light token needs a dark value')
   })
   it('the doc pages share one theme script, keyed like the setup page', () => {
     const key = /THEME_KEY = '([^']+)'/.exec(readFileSync(resolve('web/setup.js'), 'utf8'))?.[1]
@@ -329,7 +330,8 @@ function senderBinary(): string | null {
   return built.find((p) => spawnSync(p, ['frames', '--help']).status === 0) ?? null
 }
 const BIN = senderBinary()
-const skip = !existsSync(WASM) ? 'web/diodecam.wasm missing: run `pnpm wasm`' : !BIN ? 'diodecam binary missing: run `cargo build -p diodecam-cli`' : false
+// Locally a missing build skips the suite with a note; in CI it must run, so a missing build fails.
+const skip = process.env.CI ? false : !existsSync(WASM) ? 'web/diodecam.wasm missing: run `pnpm wasm`' : !BIN ? 'diodecam binary missing: run `cargo build -p diodecam-cli`' : false
 
 describe('wasm receiver', { skip }, () => {
   it('restores a file from simulated camera frames, ignoring torn ones', { timeout: 60_000 }, async () => {

@@ -15,9 +15,9 @@ use crate::tile::{Codeword, Tile, CONTENT_BYTES};
 /// r₀ is drawn from [0, 2²⁰).
 pub const R0_RANGE: u32 = 1 << 20;
 /// ESIs are 24-bit.
-pub const ESI_RANGE: u32 = 1 << 24;
+pub(crate) const ESI_RANGE: u32 = 1 << 24;
 /// Largest RaptorQ transfer length: 255 blocks of K'max symbols.
-pub const MAX_PAYLOAD_BYTES: u64 = 255 * MAX_BLOCK_SYMBOLS * SYMBOL_SIZE as u64;
+pub(crate) const MAX_PAYLOAD_BYTES: u64 = 255 * MAX_BLOCK_SYMBOLS * SYMBOL_SIZE as u64;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SendOptions {
@@ -50,7 +50,7 @@ impl fmt::Display for PrepareError {
 impl std::error::Error for PrepareError {}
 
 /// META goes into every m-th frame, m = max(1, ⌈10 / N⌉).
-pub fn meta_interval(tiles: usize) -> u64 {
+pub(crate) fn meta_interval(tiles: usize) -> u64 {
     10u64.div_ceil(tiles.max(1) as u64).max(1)
 }
 
@@ -70,7 +70,7 @@ pub fn view_seconds(source_symbols: u64, tiles: usize, fps: f64) -> f64 {
 
 /// ESI of the `i`-th repair symbol of a block with K source symbols:
 /// K + r₀ + i, wrapping from 2²⁴ back to K.
-pub fn repair_esi(k: u32, r0: u32, i: u64) -> u32 {
+pub(crate) fn repair_esi(k: u32, r0: u32, i: u64) -> u32 {
     let span = (ESI_RANGE - k) as u64;
     k + ((r0 as u64 + i) % span) as u32
 }
@@ -79,7 +79,7 @@ pub fn repair_esi(k: u32, r0: u32, i: u64) -> u32 {
 /// round-robin order, then repair symbols from ESI K_b + r₀, also round-robin.
 /// The iterator never ends.
 #[derive(Clone, Debug)]
-pub struct Schedule {
+pub(crate) struct Schedule {
     block_symbols: Vec<u32>,
     r0: u32,
     phase: Phase,
@@ -264,6 +264,7 @@ impl Transfer {
 
     /// Tiles for the next frame of a layout with `tiles` positions (unencoded).
     pub fn next_frame_tiles(&mut self, tiles: usize) -> Vec<Tile> {
+        debug_assert!(tiles >= 2, "a layout has at least 2 tile positions");
         let f = self.frames;
         self.frames += 1;
         let meta = Tile::meta(self.tag, self.meta_bytes);

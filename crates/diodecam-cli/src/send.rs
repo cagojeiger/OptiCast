@@ -57,7 +57,7 @@ pub fn run(args: &SendArgs, profile: Profile) -> Result<u8, String> {
     drop(input.data);
     transfer.prepare_repair();
     if args.fps == 30 {
-        let _ = writeln!(io::stderr(), "hint: 30 fps may phase-lock with a 30 fps camera; 24 is safer");
+        let _ = writeln!(io::stderr(), "hint: {PHASE_LOCK_NOTICE}");
     }
 
     let signals = Signals::register().map_err(|e| format!("cannot install signal handlers: {e}"))?;

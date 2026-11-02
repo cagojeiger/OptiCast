@@ -6,7 +6,7 @@
 // 119-module grid make it a little smaller than nominal). Run it before and after
 // a change to crates/diodecam-vision.
 //
-// usage: node tools/floor.ts [cols = 120] [rows = 40]   (needs target/debug/diodecam and web/diodecam.wasm)
+// usage: node tools/floor.ts [cols = 120] [rows = 40]   (builds target/debug/diodecam and web/diodecam.wasm first)
 
 import { spawnSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -15,6 +15,7 @@ import { join } from 'node:path'
 import { randomBytes } from '../test/helpers.ts'
 import { moduleSize } from '../web/metrics.js'
 import { WasmReceiver } from '../web/wasm.js'
+import { cargo } from './cargo.ts'
 import { cameraView, framing, toRgba } from './sim/camera.ts'
 import { VTerm } from './sim/vterm.ts'
 
@@ -24,6 +25,10 @@ const FRAMES = 8
 const PX = [2.5, 3, 3.5, 4, 4.5, 5, 6, 8]
 const BLUR = [0, 1, 2, 3]
 const camera = { width: 1920, height: 1080 }
+
+// Measure the code as it is now, never a stale sender or decoder.
+cargo(['build', '-q', '-p', 'diodecam-cli'])
+await import('./wasm-build.ts')
 
 const dir = mkdtempSync(join(tmpdir(), 'diodecam-floor-'))
 try {
