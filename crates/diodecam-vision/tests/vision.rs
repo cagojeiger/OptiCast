@@ -278,7 +278,9 @@ fn nothing_found_in_frames_without_a_grid() {
     let noise: Vec<u8> = (0..1280 * 720).map(|_| rng.next_u64() as u8).collect();
     assert!(vision.process(&noise, 1280, 720).is_none());
     assert!(vision.process(&vec![128; 1280 * 720], 1280, 720).is_none());
-    // A terminal with plain text only.
+    // A terminal with plain text only, on a fresh search (two empty frames make
+    // the next one a skipped one).
+    vision.reset();
     let case = moderate();
     let text = diodecam_core::ModuleGrid::new(199, 106);
     let screen = terminal(&case).rasterize(&text);
