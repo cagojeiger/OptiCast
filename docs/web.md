@@ -52,6 +52,7 @@
 | 디코더 오류 | 띠 ✕ Error와 `Decoder error. Reload to resume from the saved progress.` (카메라 정지, 여는 중이던 카메라는 켜지 않는다). Start 자리의 버튼이 **Reload**가 된다(홈 화면 앱에는 새로고침 단추가 없다) |
 | 카메라 불가 | 띠 ✕ Error와 한 문장: 권한 거부 `Camera permission denied. …`, 카메라 없음 `No camera found on this device.`, 다른 앱이 사용 중 `The camera is in use by another app. …`, 요청한 설정 불가 `This camera cannot give the requested video. …`, HTTPS/localhost가 아님 `The camera is unavailable. …`. 그 밖의 오류는 브라우저의 메시지 |
 | 카메라를 빼앗김 | 통화·다른 앱·시스템이 카메라를 가져가 트랙이 끝나면(`ended`) 카메라를 멈추고 띠 ✕ Error와 `The camera was taken by another app. Start again.` Start는 활성(다시 켜면 이어 받는다) |
+| 카메라 일시 정지 | iOS는 통화·백그라운드에서 트랙을 끝내지 않고 음소거(`mute`)한다. 그동안 경고 `The camera is paused by the system.`, `unmute`면 지운다. 띠는 그대로(수신 상태 유지) |
 | 이어 받기 실패 | 저장분을 불러오다 메모리가 모자라면 카메라 위에 주황 글 `Could not restore the saved progress. Collecting again; reload to retry.` 받기는 계속되고 띠는 ● Receiving 그대로다. 저장분은 지우지 않는다 |
 | 받은 파일이 남음 | 새로고침 뒤: `The file from last time is still here. Save or share it.` + ✓ 띠(받은 시각) |
 
