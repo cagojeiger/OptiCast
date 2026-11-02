@@ -192,9 +192,9 @@ describe('page', () => {
     const chosen = tokens(":root[data-theme='dark']")
     assert.deepEqual(chosen, system, 'a chosen dark theme is the system dark theme')
     for (const t of system.keys()) assert.ok(light.has(t), `${t} is defined for dark mode only`)
-    // Not tied to a mode: the one signal hue, the always-dark camera box, a length.
+    // Not tied to a mode: the one signal hue, the always-dark camera box, a length, a font stack.
     const shared = [...light.keys()].filter((t) => !system.has(t)).sort()
-    assert.deepEqual(shared, ['--camera', '--gutter', '--signal'], 'a new light token needs a dark value')
+    assert.deepEqual(shared, ['--camera', '--gutter', '--mono', '--signal'], 'a new light token needs a dark value')
   })
   it('the doc pages share one theme script, keyed like the setup page', () => {
     const key = /THEME_KEY = '([^']+)'/.exec(readFileSync(resolve('web/setup.js'), 'utf8'))?.[1]
