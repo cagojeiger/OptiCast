@@ -30,7 +30,8 @@
       const el = document.getElementById(id)
       if (el) el.textContent = text
     }
-    set('cmd-run', `curl -fsSL ${base} | tar xz\n./diodecam-${target}/diodecam send ${fileArg()}`)
+    set('cmd-curl', `curl -fsSL ${base} | tar xz`)
+    set('cmd-run', `./diodecam-${target}/diodecam send ${fileArg()}`)
     set('cmd-fetch', `curl -fsSLO ${base}\ncurl -fsSLO ${base}.sha256`)
     set('cmd-verify', `sha256sum -c diodecam-${target}.tar.gz.sha256\ntar xzf diodecam-${target}.tar.gz`)
     const macTarget = target.endsWith('apple-darwin') ? target : 'aarch64-apple-darwin'
@@ -54,6 +55,29 @@
   } catch {
     // not remembered
   }
+  // Theme: a choice is stored and applied before paint by the head script; 'auto' clears it.
+  const THEME_KEY = 'diodecam.theme'
+  const themeButtons = /** @type {HTMLButtonElement[]} */ ([...document.querySelectorAll('.theme button')])
+  const showTheme = () => {
+    const chosen = document.documentElement.dataset.theme ?? 'auto'
+    for (const b of themeButtons) b.setAttribute('aria-pressed', String(b.dataset.theme === chosen))
+  }
+  for (const b of themeButtons)
+    b.addEventListener('click', () => {
+      const t = b.dataset.theme ?? 'auto'
+      if (t === 'auto') delete document.documentElement.dataset.theme
+      else document.documentElement.dataset.theme = t
+      const dark = t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches)
+      for (const m of document.querySelectorAll('meta[name="theme-color"]')) m.setAttribute('content', dark ? '#171717' : '#ffffff')
+      try {
+        if (t === 'auto') localStorage.removeItem(THEME_KEY)
+        else localStorage.setItem(THEME_KEY, t)
+      } catch {
+        // not remembered
+      }
+      showTheme()
+    })
+  showTheme()
   for (const b of /** @type {HTMLButtonElement[]} */ ([...document.querySelectorAll('button.copy')])) {
     b.addEventListener('click', async () => {
       const text = document.getElementById(b.dataset.copy ?? '')?.textContent ?? ''
