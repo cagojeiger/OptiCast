@@ -20,7 +20,7 @@
   --bad: #b91c1c;
   --camera: #0a0a0a;
   --gutter: 16px;
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: system-ui, -apple-system, 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
 }
@@ -39,7 +39,9 @@
     --invert-bg: #ececec;
     --invert-text: #171717;
     --secondary: #2f2f2f;
+    --done: #34d399;
     --warn: #fbbf24;
+    --bad: #f87171;
   }
 }
 

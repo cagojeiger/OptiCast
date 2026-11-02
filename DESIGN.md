@@ -2,7 +2,8 @@
 
 ## Source of truth
 
-- Status: Active · 2026-11-02
+- Status: Active · 2026-11-02. The tokens are shipped; the layout, components, desktop page and
+  English copy below are the target that the next changes implement.
 - Scope: the receiver page (`web/`) on phones and the setup page on desktops. The sender CLI's
   terminal output is specified in `docs/cli.md`.
 - Tokens: `web/style.css` `:root` is the canonical value of every color and spacing token. This
@@ -96,8 +97,9 @@ Roles (values in `web/style.css`): `bg`, `panel`, `surface`, `line`, `text`, `te
 
 ## Accessibility
 
-Touch targets ≥ 44 px, action buttons 52 px. Text contrast ≥ 4.5:1 in both modes (checked for
-`muted` on `bg`, `disabled` on `bg`, `warn` on `bg`, strip text on each strip color). State is never
+Touch targets ≥ 44 px, action buttons 52 px. Text contrast ≥ 4.5:1 in both modes for every
+enabled text role (`muted`, `warn`, `done`, `bad` on `bg`; strip text on each strip color); disabled
+controls are exempt by WCAG and sit at about 3:1 so they still read. State is never
 color alone: the strip carries ○ ● ✓ ✕ and words. Focus is a 2 px outline in `text`. Every icon
 button has an `aria-label`; the status strip is `role="status"`.
 
