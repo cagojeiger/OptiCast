@@ -4,12 +4,14 @@
 use std::ffi::OsString;
 use std::path::PathBuf;
 
+use diodecam_core::receiver::DEFAULT_MAX_FILE;
 use diodecam_core::Profile;
 
 use crate::{file, status};
 
 pub const DEFAULT_FPS: u32 = 24;
-pub const DEFAULT_MAX_BYTES: u64 = 64 << 20;
+/// The receiver's default limit, so a default send fits a default receiver.
+pub const DEFAULT_MAX_BYTES: u64 = DEFAULT_MAX_FILE;
 
 const USAGE: &str = "\
 One-way optical file transfer: draw a file as frames for a phone camera
@@ -183,7 +185,7 @@ pub fn parse(args: Vec<OsString>) -> Result<Command, String> {
     }
 }
 
-/// Picks the profile (spec §2). `auto` is `ssh` unless we run under tmux or
+/// Picks the profile (spec §1). `auto` is `ssh` unless we run under tmux or
 /// screen with a non-UTF-8 locale, where `▀` would be mangled; then `vt100`
 /// with a warning.
 pub fn resolve_profile(arg: ProfileArg, env: impl Fn(&str) -> Option<String>) -> (Profile, Option<String>) {

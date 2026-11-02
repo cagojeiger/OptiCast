@@ -259,10 +259,6 @@ impl Layout {
             v => Some(v == 1),
         }
     }
-
-    pub fn is_reserved(&self, x: usize, y: usize) -> bool {
-        self.fixed(x, y).is_some()
-    }
 }
 
 /// Smallest terminal height (rows) at which `cols` columns give a valid layout.
@@ -273,7 +269,7 @@ pub fn min_rows(profile: Profile, cols: usize) -> Option<usize> {
     (STATUS_ROWS + 1..=STATUS_ROWS + MAX_SIDE).find(|&rows| Layout::for_terminal(profile, cols, rows).is_ok())
 }
 
-/// Builds the fixed pattern of spec §2.1–3.4. Requires W ≥ 68 and H ≥ 20 so that
+/// Builds the fixed pattern of spec §2.1–2.4. Requires W ≥ 68 and H ≥ 20 so that
 /// no two regions overlap.
 fn fixed_pattern(format: FormatInfo) -> Vec<u8> {
     let FormatInfo { width: w, height: h, .. } = format;
@@ -411,7 +407,7 @@ mod tests {
                 let Ok(layout) = Layout::new(profile, w, h) else { continue };
                 for y in 0..h {
                     for x in 0..w {
-                        assert_eq!(layout.is_reserved(x, y), spec_reserved(w, h, x, y), "{w}x{h} at ({x},{y})");
+                        assert_eq!(layout.fixed(x, y).is_some(), spec_reserved(w, h, x, y), "{w}x{h} at ({x},{y})");
                     }
                 }
                 assert_eq!(layout.data_modules().len(), expected_data(w, h), "{w}x{h}");

@@ -12,19 +12,16 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::time::Duration;
 
-use diodecam_core::{ansi, frame, Layout, Profile, SendOptions, Transfer};
+use diodecam_core::{ansi, frame, Layout, SendOptions, Transfer};
 
-use crate::args::{FramesArgs, ProfileArg, DEFAULT_FPS};
+use crate::args::{resolve_profile, FramesArgs, DEFAULT_FPS};
+use crate::file;
 use crate::status::{self, Status};
 
 pub fn run(args: &FramesArgs) -> Result<(), String> {
-    let shown = args.file.display().to_string();
-    let data = std::fs::read(&args.file).map_err(|e| format!("{shown}: cannot read: {e}"))?;
-    let name = args.file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "file".into());
-    let profile = match args.profile {
-        ProfileArg::Vt100 => Profile::Vt100,
-        ProfileArg::Ssh | ProfileArg::Auto => Profile::Ssh,
-    };
+    let file::Input { data, name } = file::load(&args.file, u64::MAX)?;
+    // No environment: `auto` is `ssh`, whatever terminal runs the tests.
+    let profile = resolve_profile(args.profile, |_| None).0;
     let (cols, rows) = (args.cols as usize, args.rows as usize);
     let layout = Layout::for_terminal(profile, cols, rows).map_err(|e| e.to_string())?;
     let mut tx = Transfer::prepare(&data, &name, SendOptions { compress: !args.no_compress }, args.r0)
@@ -105,6 +102,7 @@ fn json_string(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::args::ProfileArg;
 
     #[test]
     fn json_escapes() {

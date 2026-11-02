@@ -3,7 +3,8 @@
 //! [`frame`] turns a module grid into the exact bytes the sender writes.
 //! [`Screen`] / [`parse_screen`] read terminal output — raw sender bytes or
 //! `tmux capture-pane -p -e` text — back into a module grid. The parser knows
-//! CUP, SGR 0/7/27, ED/EL, newlines, and skips every other escape sequence.
+//! CUP, CUU/CUD/CUF/CUB, CHA, VPA, SGR 0/7/27, ED/EL and the controls LF, CR, BS
+//! and TAB; it skips every other escape sequence and control character.
 
 use std::fmt::Write as _;
 

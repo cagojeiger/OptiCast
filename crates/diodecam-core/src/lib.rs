@@ -5,9 +5,11 @@
 //! [`sender::Transfer::next_frame`] → [`frame::render`] → [`ansi::frame`] → one write.
 //!
 //! Receiver pipeline:
-//! 1. Get a module grid and its format information — from a camera sampler, or
-//!    from terminal text with [`ansi::parse_screen`]. For a sampled grid,
-//!    [`frame::read_format`] checks the FI (3-copy majority + CRC-8, two places).
+//! 1. Get a module grid and its format information. From terminal text,
+//!    [`ansi::parse_screen`] does both and checks the FI with [`frame::read_format`]
+//!    (both copies, which must agree). A camera reader (`diodecam-vision`) samples
+//!    one FI copy at a time itself and decodes it with [`layout::FormatInfo::from_bits`]
+//!    (3-copy majority + CRC-8).
 //! 2. [`layout::Layout::from_format`] gives the data-module order
 //!    ([`layout::Layout::tile_modules`]).
 //! 3. [`frame::read_tiles`] → [`tile::decode`] per position (de-whiten → RS → CRC-32C → [`tile::Tile`]),
