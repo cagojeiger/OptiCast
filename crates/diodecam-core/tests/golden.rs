@@ -1,16 +1,22 @@
-//! Golden bytes of the sender: the exact terminal text, META block and transfer
-//! ID that today's sender produces for a few fixed inputs.
+//! Golden bytes of the sender: the per-frame terminal text (without the one-time
+//! ENTER/LEAVE sequences), META block and transfer ID that today's sender
+//! produces for a few fixed inputs. They were captured from v0.3.0.
 //!
 //! The web receiver deploys on every merge, while released `diodecam` binaries
 //! stay in the field for months. Every other multi-step test is a round trip
 //! through one commit, so a change made symmetrically to both sides (layout,
 //! whitening, tile header, META fields, symbol order, deflate output…) passes
-//! them all. This one does not: a failure here means a released sender and this
-//! receiver would disagree on what is on screen.
+//! them all. This one does not: a failure here means the sender's on-screen
+//! bytes differ from the last release's. Then decide which of two cases it is:
 //!
-//! Updating these constants is a protocol / sender change. Do it only on
-//! purpose, together with the matching receiver change, and say so in the
-//! release notes (old senders vs new receiver, and the other way round).
+//! - A protocol change (tiles, META, whitening, layout, RS, symbol order):
+//!   needs the matching receiver change, a FI version bump where the spec says
+//!   so, and release notes (old senders vs new receiver, and the other way).
+//! - A presentation change (ANSI escapes, the status bar, the deflate encoder):
+//!   the screen means the same; check that the last release's receiver still
+//!   decodes the new frames (and, for deflate, that transfer IDs may change).
+//!
+//! Only then re-pin the constants, on purpose.
 
 use diodecam_core::{ansi, crc32c, frame, Compression, Layout, Profile, SendOptions, Transfer};
 
@@ -128,22 +134,27 @@ fn vt100_200x55_with_a_truncated_utf8_name() {
 /// every compressible file.
 #[test]
 fn compressible_file_is_deflated() {
-    let text = b"DiodeCam golden text: the quick brown fox jumps over the lazy dog.\n".repeat(300);
-    assert!(text.len() > 20_000);
+    // Varied enough that deflate levels 5, 6 and 9 give different output: the case
+    // also pins the encoder settings and the flate2/miniz_oxide version.
+    let text: Vec<u8> = (0..600)
+        .flat_map(|i| format!("{i:05} the quick brown fox {} jumps over {}\n", i * 7919 % 10007, i % 13).into_bytes())
+        .collect();
+    let text_len = text.len() as u64;
+    assert!(text_len > 20_000);
     let case = Case { data: text, name: "notes.txt", profile: Profile::Ssh, cols: 120, rows: 40 };
     let (tx, _, got) = run(&case);
     assert_eq!(tx.meta().compression, Compression::DeflateRaw);
-    assert!(tx.payload_len() < 1000);
+    assert!(tx.payload_len() < text_len / 2, "deflate halves it at least");
     let meta = concat!(
-        "2ee87541",                                                                     // transfer ID
-        "0000000000004e84",                                                             // size 20100
-        "3e81ecd7c281cc698a0f47acf574e44bb116afdba3fa905fa7ffbbd09a09e7a3",             // SHA-256
+        "9d79eca8",                                                                     // transfer ID
+        "0000000000006767",                                                             // size 26471
+        "ca37191e857bcf02621cdc85f19bbd3de1cf2ec1525c37a6b9056f5fc976374a",             // SHA-256
         "01",                                                                           // deflate-raw
-        "000000009600006001000108",                                                     // OTI: 150-byte payload
+        "0000000fd400006001000108",                                                     // OTI: 4052-byte payload
         "09",                                                                           // name length
         "6e6f7465732e7478740000000000000000000000000000000000000000000000000000000000", // "notes.txt"
     );
-    check("deflate", &got, 0x2ee8_7541, meta, 0x6528_57ff);
+    check("deflate", &got, 0x9d79_eca8, meta, 0x048f_5bc6);
 }
 
 #[test]

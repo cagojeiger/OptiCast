@@ -5,7 +5,7 @@
 
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, it } from 'node:test'
@@ -153,7 +153,7 @@ describe('page', () => {
     assert.ok(head.includes("get('receiver') === '1'"), '?receiver=1 forces the receiver')
   })
   it('has every element the scripts look up by id', () => {
-    const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]))
+    const ids = new Set([...html.matchAll(/(?<![\w-])id="([^"]+)"/g)].map((m) => m[1]))
     // main.js wraps getElementById as `$('x')`, setup.js as `set('x', …)`.
     const lookups = ['main.js', 'setup.js'].flatMap((f) =>
       [...readFileSync(resolve('web', f), 'utf8').matchAll(/(?:getElementById|(?<![\w.])\$|(?<![\w.])set)\('([^']+)'/g)].map((m) => m[1] ?? ''),
@@ -172,6 +172,11 @@ describe('page', () => {
       if (f === 'diodecam.wasm' && !existsSync(resolve('web', f))) continue // built by `pnpm wasm`
       assert.ok(existsSync(resolve('web', f)), `sw.js caches ${f}, which is not in web/`)
     }
+    // And the other way: every versioned reference in the page files is cached.
+    const referenced = new Set<string>()
+    for (const f of readdirSync(resolve('web')).filter((f) => /\.(html|js|css|webmanifest)$/.test(f)))
+      for (const m of readFileSync(resolve('web', f), 'utf8').matchAll(/\.\/([\w.-]+)\?v=__V__/g)) referenced.add(m[1] ?? '')
+    for (const f of referenced) assert.ok(files.includes(f), `${f} is referenced with ?v= but sw.js does not cache it`)
   })
   it('redefines every colour token for dark mode, the same way in both dark blocks', () => {
     const css = readFileSync(resolve('web/style.css'), 'utf8')
@@ -269,7 +274,7 @@ describe('resume store', () => {
     assert.equal(shouldSave(saved, 51), true)
   })
 
-  it('offers the received file for 24 hours at most (the README privacy promise)', () => {
+  it('offers the received file for 24 hours at most (the privacy.html promise)', () => {
     const day = 24 * 3600 * 1000
     const now = 100 * day
     const kept = (ageMs: number, blob: unknown = new Blob(['x'])) => ({ id: 'a', name: 'a', size: 1, receivedAt: now - ageMs, blob }) as KeptFile

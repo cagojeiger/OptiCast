@@ -669,6 +669,7 @@ mod tests {
             rx.accept(symbols[i]);
             i += 1;
         }
+        assert_eq!(i as u64, tx.source_symbols(), "done on the last source symbol: the first ten still count");
         assert_eq!(rx.accept(&meta), Accepted::MetaRepeat);
         assert_eq!(rx.finalize(), Ok(data));
         assert_eq!(rx.accept(&meta), Accepted::MetaRepeat, "also after the file was taken");
