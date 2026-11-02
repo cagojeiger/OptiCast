@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -8,85 +8,110 @@
     <meta name="color-scheme" content="light dark" />
     <meta name="apple-mobile-web-app-title" content="DiodeCam" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <title>DiodeCam 수신기</title>
+    <title>DiodeCam Receiver</title>
     <link rel="manifest" href="./manifest.webmanifest?v=__V__" />
     <link rel="icon" href="./icon-192.png?v=__V__" />
     <link rel="apple-touch-icon" href="./icon-180.png?v=__V__" />
     <link rel="stylesheet" href="./style.css?v=__V__" />
   </head>
   <body>
+    <!-- One fixed layout (DESIGN.md): every control exists in every state; only fill, text and
+         enablement change. Toolbar: sender sheet · reset · stats sheet. -->
     <main>
-      <header>
-        <h1>DiodeCam <span>수신기</span></h1>
-        <p id="status" data-testid="status">카메라를 시작하고 송신 화면 전체를 비추세요.</p>
+      <header class="toolbar">
+        <h1>DiodeCam <span>Receiver</span></h1>
+        <button id="sender-btn" class="icon" data-testid="sender" aria-label="Get the sender" title="Get the sender">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M7 9l3 3-3 3M13 15h4" /></svg>
+        </button>
+        <button id="reset" class="icon" data-testid="reset" aria-label="Reset" title="Reset" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5" /></svg>
+        </button>
+        <button id="stats-btn" class="icon" data-testid="stats" aria-label="Stats and diagnostics" title="Stats and diagnostics">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg>
+        </button>
       </header>
 
-      <section class="viewer">
+      <section class="viewer" aria-label="Camera">
         <video id="preview" playsinline muted autoplay></video>
         <canvas id="overlay" aria-hidden="true"></canvas>
+        <div class="guides" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <div class="prompt" id="prompt" data-testid="prompt">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z" /><circle cx="12" cy="13" r="3.5" /></svg>
+          <p id="status" data-testid="status">Start the camera and<br />frame the whole sender screen</p>
+        </div>
+        <div class="ring" id="ring" data-testid="ring" role="img" aria-label="Progress" hidden><span id="ring-label">0%</span></div>
+        <div class="tick" id="tick" role="img" aria-label="Received" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></div>
       </section>
 
-      <div class="panel">
-        <section class="card" aria-label="진행 상황">
-          <div class="file-row">
-            <p class="file">
-              <span id="file-name" data-testid="file-name">—</span><span id="file-size"></span><span id="file-id" class="id" data-testid="file-id"></span>
-            </p>
-            <button id="reset" class="quiet" data-testid="reset">초기화</button>
-          </div>
-          <div class="progress-row">
-            <span id="symbols" data-testid="symbols">조각 0 / ?</span>
-            <span id="percent" data-testid="percent">0%</span>
-          </div>
-          <progress id="progress" max="1" value="0"></progress>
-          <p id="hint" class="hint" data-testid="hint" hidden></p>
-        </section>
-
-        <section class="card result" id="result" data-testid="result" hidden>
-          <p id="result-text"></p>
-          <div class="controls">
-            <button id="share" class="primary" data-testid="share" hidden>공유 · 파일에 저장</button>
-            <button id="download" data-testid="download">다운로드</button>
-          </div>
-        </section>
-
-        <details class="card" id="details">
-          <summary>측정값 <span id="summary" data-testid="summary"></span></summary>
-          <dl class="stats">
-            <div><dt>촬영</dt><dd id="stat-capture" data-testid="capture-fps">—</dd></div>
-            <div><dt>처리</dt><dd id="stat-process" data-testid="process-fps">—</dd></div>
-            <div><dt>디코드</dt><dd id="stat-ms" data-testid="decode-ms">—</dd></div>
-            <div><dt>타일 인식</dt><dd id="stat-recognition" data-testid="recognition">—</dd></div>
-            <div><dt>격자</dt><dd id="stat-grid" data-testid="grid">—</dd></div>
-            <div><dt>모듈 크기</dt><dd id="stat-module" data-testid="module">—</dd></div>
-            <div><dt>실패 단계</dt><dd id="stat-stage" data-testid="stage">—</dd></div>
-            <div><dt>남은 시간</dt><dd id="stat-eta" data-testid="eta">—</dd></div>
-            <div><dt>카메라</dt><dd id="stat-camera" data-testid="camera">—</dd></div>
-            <div><dt>렌즈</dt><dd id="stat-lens" data-testid="lens">—</dd></div>
-            <div><dt>다른 전송</dt><dd id="stat-foreign" data-testid="foreign">0</dd></div>
-          </dl>
-          <label class="field">
-            <span>카메라 선택</span>
-            <select id="camera-select" data-testid="camera-select" disabled>
-              <option value="">자동 (후면 기본)</option>
-            </select>
-          </label>
-          <div class="controls">
-            <button id="copy" data-testid="copy">진단 복사</button>
-          </div>
-          <p class="note">
-            진단에는 기기·카메라 정보와 인식 통계만 담기고 파일 이름과 내용은 담기지 않습니다. 모든 처리는 이 브라우저 안에서만
-            이루어지며 아무것도 업로드하지 않습니다.
-          </p>
-        </details>
-
-        <pre id="debug" data-testid="debug" hidden></pre>
-
-        <div class="bar">
-          <button id="start" class="primary" data-testid="start">카메라 시작</button>
+      <section class="progress" aria-label="Progress">
+        <div class="file-row">
+          <span class="file"><span id="file-name" data-testid="file-name">No file yet</span></span>
+          <span id="file-size" data-testid="file-size" class="muted">—</span>
         </div>
-      </div>
+        <div class="bar-track"><div id="bar" class="bar-fill" data-testid="bar"></div></div>
+        <div id="strip" class="strip" data-state="idle" role="status" data-testid="strip">
+          <span id="strip-state">○ Idle</span>
+          <span id="symbols" data-testid="symbols">0 / ?</span>
+          <span id="strip-extra" data-testid="strip-extra"></span>
+          <span class="grow"></span>
+          <span id="strip-right" data-testid="percent">0%</span>
+        </div>
+        <p id="hint" class="hint" data-testid="hint">Share · Save turns on when the file is complete</p>
+      </section>
+
+      <nav class="actions" aria-label="Actions">
+        <button id="start" class="primary" data-testid="start"><svg viewBox="0 0 24 24" class="fill" aria-hidden="true"><path d="M7 4l13 8-13 8z" /></svg><span id="start-label">Start</span></button>
+        <button id="download" data-testid="download" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 11l4 4 4-4M5 21h14" /></svg>Download</button>
+        <button id="share" data-testid="share" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" /></svg>Share · Save</button>
+      </nav>
     </main>
+
+    <!-- Sheets. Native <dialog> so Escape, focus and the backdrop come for free. -->
+    <dialog id="sender-sheet" class="sheet" aria-label="Get the sender">
+      <div class="handle" aria-hidden="true"></div>
+      <div class="sheet-head"><h2>Get the sender</h2><button class="icon close" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></button></div>
+      <p class="muted">The sender runs on the machine that has the file. Open this address on a computer for the install steps.</p>
+      <button id="send-link" class="primary wide" data-testid="send-link"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" /></svg>Send link to a computer</button>
+      <p class="label">Direct download (tar.gz)</p>
+      <ul class="rows" id="downloads">
+        <li><a href="https://github.com/cagojeiger/diodecam/releases/latest/download/diodecam-x86_64-unknown-linux-musl.tar.gz">Linux x86_64</a></li>
+        <li><a href="https://github.com/cagojeiger/diodecam/releases/latest/download/diodecam-aarch64-unknown-linux-musl.tar.gz">Linux arm64</a></li>
+        <li><a href="https://github.com/cagojeiger/diodecam/releases/latest/download/diodecam-aarch64-apple-darwin.tar.gz">macOS (Apple silicon)</a></li>
+        <li><a href="https://github.com/cagojeiger/diodecam/releases/latest/download/diodecam-x86_64-apple-darwin.tar.gz">macOS (Intel)</a></li>
+      </ul>
+    </dialog>
+
+    <dialog id="stats-sheet" class="sheet" aria-label="Stats and diagnostics">
+      <div class="handle" aria-hidden="true"></div>
+      <div class="sheet-head"><h2>Stats <span id="summary" data-testid="summary" class="muted"></span></h2><button class="icon close" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></button></div>
+      <dl class="stats">
+        <div><dt>Capture</dt><dd id="stat-capture" data-testid="capture-fps">—</dd></div>
+        <div><dt>Processed</dt><dd id="stat-process" data-testid="process-fps">—</dd></div>
+        <div><dt>Decode</dt><dd id="stat-ms" data-testid="decode-ms">—</dd></div>
+        <div><dt>Tiles read</dt><dd id="stat-recognition" data-testid="recognition">—</dd></div>
+        <div><dt>Grid</dt><dd id="stat-grid" data-testid="grid">—</dd></div>
+        <div><dt>Module</dt><dd id="stat-module" data-testid="module">—</dd></div>
+        <div><dt>Stuck at</dt><dd id="stat-stage" data-testid="stage">—</dd></div>
+        <div><dt>Time left</dt><dd id="stat-eta" data-testid="eta">—</dd></div>
+        <div><dt>Camera</dt><dd id="stat-camera" data-testid="camera">—</dd></div>
+        <div><dt>Lens</dt><dd id="stat-lens" data-testid="lens">—</dd></div>
+        <div><dt>Other transfers</dt><dd id="stat-foreign" data-testid="foreign">0</dd></div>
+        <div><dt>Transfer</dt><dd id="file-id" data-testid="file-id">—</dd></div>
+      </dl>
+      <label class="field">
+        <span>Camera</span>
+        <select id="camera-select" data-testid="camera-select" disabled>
+          <option value="">Auto (back camera)</option>
+        </select>
+      </label>
+      <button id="copy" class="wide" data-testid="copy">Copy diagnostics</button>
+      <p class="note">
+        Diagnostics hold device, camera and recognition numbers only, never the file's name, size or content. Everything
+        runs in this browser; nothing is uploaded.
+      </p>
+      <pre id="debug" data-testid="debug" hidden></pre>
+    </dialog>
+
     <script type="module" src="./main.js?v=__V__"></script>
   </body>
 </html>

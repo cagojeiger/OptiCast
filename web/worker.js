@@ -51,7 +51,7 @@ function handle(msg) {
       case 'frame': {
         const started = performance.now()
         if (rx.process(new Uint8Array(msg.pixels), msg.width, msg.height) === OUT_OF_MEMORY) {
-          post({ type: 'error', message: '메모리가 부족해 프레임을 건너뜁니다', fatal: false })
+          post({ type: 'error', message: 'Out of memory, skipping frames', fatal: false })
           return
         }
         const stats = rx.stats()

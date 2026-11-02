@@ -53,13 +53,23 @@ const fileNameEl = $('file-name')
 const fileSizeEl = $('file-size')
 const fileIdEl = $('file-id')
 const symbolsEl = $('symbols')
-const percentEl = $('percent')
-const progressEl = /** @type {HTMLProgressElement} */ ($('progress'))
+const stripEl = $('strip')
+const stripState = $('strip-state')
+const stripExtra = $('strip-extra')
+const stripRight = $('strip-right')
+const barEl = $('bar')
+const ringEl = $('ring')
+const ringLabel = $('ring-label')
+const tickEl = $('tick')
 const hintEl = $('hint')
-const resultEl = $('result')
-const resultText = $('result-text')
-const shareBtn = $('share')
-const downloadBtn = $('download')
+const fileEl = /** @type {HTMLElement} */ (fileNameEl.parentElement)
+const progressSection = /** @type {HTMLElement} */ (document.querySelector('.progress'))
+const startLabel = $('start-label')
+const shareBtn = /** @type {HTMLButtonElement} */ ($('share'))
+const downloadBtn = /** @type {HTMLButtonElement} */ ($('download'))
+const resetBtn = /** @type {HTMLButtonElement} */ ($('reset'))
+const senderSheet = /** @type {HTMLDialogElement} */ ($('sender-sheet'))
+const statsSheet = /** @type {HTMLDialogElement} */ ($('stats-sheet'))
 const debugEl = $('debug')
 const summaryEl = $('summary')
 const cameraSelect = /** @type {HTMLSelectElement} */ ($('camera-select'))
@@ -92,8 +102,6 @@ send({ type: 'limit', mib: LIMIT_MIB })
 if (DEBUG) {
   send({ type: 'debug', on: true })
   debugEl.hidden = false
-  const details = /** @type {HTMLDetailsElement} */ ($('details'))
-  details.open = true
 }
 // Offline copy for the home-screen app (sw.js); only where the build stamped a version.
 // The one unversioned URL: the browser re-checks a service worker script itself,
@@ -168,6 +176,13 @@ function newSession() {
 }
 let session = newSession()
 
+/** @param {string} d */
+function pathEl(d) {
+  const p = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+  p.setAttribute('d', d)
+  return p
+}
+
 /**
  * @param {string} text
  * @param {'ok' | 'warn' | 'bad' | ''} [tone]
@@ -197,7 +212,7 @@ function onFrame(now, gen) {
     captureTimes = captureTimes.filter((t) => t > now - 2000)
     if (!busy) grab(now)
   } catch (err) {
-    workerError = `프레임을 읽지 못했습니다: ${/** @type {Error} */ (err).message}`
+    workerError = `Could not read a frame: ${/** @type {Error} */ (err).message}`
     queueRender()
   } finally {
     schedule(gen)
@@ -252,7 +267,7 @@ worker.onerror = (event) => {
 function fatal() {
   stopCamera()
   startBtn.disabled = true
-  workerError = '디코더 오류 — 새로고침하면 저장된 진행분에서 이어 받습니다.'
+  workerError = 'Decoder error. Reload to resume from the saved progress.'
 }
 
 /** @param {Extract<FromWorker, { type: 'result' }>} r */
@@ -261,7 +276,7 @@ function onResult(r) {
   const now = performance.now()
   const s = r.stats
   last = s
-  workerError = s.error && !s.done ? `검증 실패, 다시 모으는 중 (${s.error})` : ''
+  workerError = s.error && !s.done ? `Verification failed, collecting again (${s.error})` : ''
   decodeMs = decodeMs ? decodeMs * 0.8 + r.ms * 0.2 : r.ms
   resultTimes.push(now)
   resultTimes = resultTimes.filter((t) => t > now - 2000)
@@ -312,6 +327,7 @@ function note(s, module) {
 function drawOverlay(s) {
   overlayCtx.clearRect(0, 0, overlay.width, overlay.height)
   const c = s.corners
+  viewer.classList.toggle('detected', !!s.detected)
   if (!c || c.some((v) => v === null)) return
   const line = Math.max(3, overlay.width / 300)
   const ok = s.tiles.total ? s.tiles.ok / s.tiles.total : 0
@@ -354,9 +370,9 @@ function render() {
   const processed = fps(resultTimes)
   const setFps = settings.frameRate ? Math.round(settings.frameRate) : null
   stat.capture.textContent = scanning
-    ? `${capture === null ? '—' : Math.round(capture)} fps${setFps ? ` (설정 ${setFps})` : ''}`
+    ? `${capture === null ? '—' : Math.round(capture)} fps${setFps ? ` (set ${setFps})` : ''}`
     : setFps
-      ? `설정 ${setFps} fps`
+      ? `set ${setFps} fps`
       : '—'
   stat.camera.textContent = settings.width ? `${settings.width}×${settings.height}` : '—'
   stat.lens.textContent = lens || '—'
@@ -368,54 +384,115 @@ function render() {
   const module = quantile(frames.map((f) => f.module), 0.5)
   stat.module.textContent = module === null ? '—' : `${module.toFixed(1)} px`
   const failed = failure(frames)
-  stat.stage.textContent = failed ? `${STAGE_TEXT[failed.stage]} ${Math.round(failed.share * 100)}%` : frames.length && scanning ? '없음' : '—'
+  stat.stage.textContent = failed ? `${STAGE_TEXT[failed.stage]} ${Math.round(failed.share * 100)}%` : frames.length && scanning ? 'nothing' : '—'
   stat.foreign.textContent = s ? thousands(s.foreign) : '0'
   summaryEl.textContent = scanning
-    ? [rate === null ? '' : `인식 ${Math.round(rate * 100)}%`, module === null ? '' : `모듈 ${module.toFixed(1)} px`, capture === null ? '' : `${Math.round(capture)} fps`]
+    ? [rate === null ? '' : `${Math.round(rate * 100)}% read`, module === null ? '' : `${module.toFixed(1)} px`, capture === null ? '' : `${Math.round(capture)} fps`]
         .filter(Boolean)
         .join(' · ')
     : ''
 
   const need = s?.symbols.need ?? null
   const have = s?.symbols.have ?? 0
-  symbolsEl.textContent = `조각 ${thousands(have)} / ${need === null ? '?' : thousands(need)}`
   const fraction = need ? Math.min(1, have / need) : 0
-  percentEl.textContent = `${Math.floor(fraction * 100)}%`
-  progressEl.value = fraction
-  if (s?.meta) {
-    fileNameEl.textContent = safeName(s.meta.name)
-    fileSizeEl.textContent = `· ${formatBytes(s.meta.size)}`
-    // The same 8 hex digits as the sender's status line, to tell transfers apart.
-    fileIdEl.textContent = `· id ${s.meta.id}`
-  }
   const left = eta(have, need, symbolRate(progress))
   stat.eta.textContent = left === null ? '—' : formatSeconds(left)
+  const done = !!offer && !scanning
+  const receiving = scanning && !!s?.meta && !s.done
+  const error = !!notice && notice.tone === 'bad'
 
-  const h = scanning && !s?.done ? hint(frames, video.videoHeight > video.videoWidth) : null
-  hintEl.hidden = h === null
-  if (h) {
-    hintEl.textContent = `▸ ${HINT_TEXT[h]}`
-    hintEl.dataset.tone = h === 'faster' ? 'ok' : ''
+  // File row: the transfer on screen, else the kept file, else nothing.
+  if (s?.meta) {
+    fileNameEl.textContent = safeName(s.meta.name)
+    fileSizeEl.textContent = formatBytes(s.meta.size)
+    fileIdEl.textContent = s.meta.id // the same 8 hex digits as the sender's status line
+  } else if (offer) {
+    fileNameEl.textContent = offer.name
+    fileSizeEl.textContent = formatBytes(offer.file.size)
+    fileIdEl.textContent = offer.id
+  } else {
+    fileNameEl.textContent = 'No file yet'
+    fileSizeEl.textContent = '—'
+    fileIdEl.textContent = '—'
+  }
+  fileEl.classList.toggle('empty', !s?.meta && !offer)
+
+  // Progress bar, ring and tick.
+  barEl.style.width = `${(done ? 1 : fraction) * 100}%`
+  progressSection.classList.toggle('done', done)
+  ringEl.hidden = !receiving
+  ringEl.style.setProperty('--p', `${fraction * 100}%`)
+  ringLabel.textContent = `${Math.floor(fraction * 100)}%`
+  tickEl.hidden = !done
+
+  // The strip: one place, four colors.
+  const resumedText = resumed > 0 ? ` · ${thousands(resumed)} resumed` : ''
+  if (error) {
+    stripEl.dataset.state = 'error'
+    stripState.textContent = '✕ Error'
+    symbolsEl.textContent = ''
+    stripExtra.textContent = ''
+    stripRight.textContent = ''
+  } else if (done && offer) {
+    stripEl.dataset.state = 'done'
+    stripState.textContent = '✓ Received'
+    symbolsEl.textContent = 'SHA-256 verified'
+    stripExtra.textContent = ''
+    stripRight.textContent = `at ${new Date(offer.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+  } else if (receiving) {
+    stripEl.dataset.state = 'receiving'
+    stripState.textContent = '● Receiving'
+    symbolsEl.textContent = `${thousands(have)} / ${need === null ? '?' : thousands(need)}`
+    stripExtra.textContent = `${rate === null ? '' : `${Math.round(rate * 100)}% read`}${resumedText}`
+    stripRight.textContent = left === null ? `${Math.floor(fraction * 100)}%` : `${formatSeconds(left)} left`
+  } else {
+    stripEl.dataset.state = 'idle'
+    stripState.textContent = scanning ? '○ Looking' : s?.meta ? '○ Paused' : '○ Idle'
+    symbolsEl.textContent = s?.meta ? `${thousands(have)} / ${need === null ? '?' : thousands(need)}` : ''
+    stripExtra.textContent = ''
+    stripRight.textContent = `${Math.floor(fraction * 100)}%`
   }
 
+  // Buttons: always present; enabled when they can act.
+  startLabel.textContent = scanning ? 'Stop' : 'Start'
+  startBtn.classList.toggle('primary', !scanning && !offer)
+  startBtn.querySelector('svg')?.replaceChildren(pathEl(scanning ? 'M5 5h14v14H5z' : 'M7 4l13 8-13 8z'))
+  const canShare = !!offer && (navigator.canShare?.({ files: [offer.file] }) ?? false)
+  shareBtn.disabled = !canShare
+  downloadBtn.disabled = !offer
+  shareBtn.classList.toggle('primary', canShare)
+  downloadBtn.classList.toggle('primary', !!offer && !canShare)
+  resetBtn.disabled = !offer && !s?.meta && !scanning
+
+  // Hint line: always 20 px; the reason a control is off, or what to change.
+  const h = scanning && !s?.done ? hint(frames, video.videoHeight > video.videoWidth) : null
+  if (h) {
+    hintEl.textContent = `⚠ ${HINT_TEXT[h]}`
+    hintEl.dataset.tone = h === 'faster' ? 'ok' : 'warn'
+  } else if (workerError) {
+    hintEl.textContent = workerError
+    hintEl.dataset.tone = 'warn'
+  } else if (done) {
+    hintEl.textContent = offer?.saved ? 'Saved. You can start the next file.' : 'Save it, then press q in the terminal'
+    hintEl.dataset.tone = ''
+  } else {
+    hintEl.textContent = resumed > 0 ? `${thousands(resumed)} pieces resumed from the last session` : 'Share · Save turns on when the file is complete'
+    hintEl.dataset.tone = ''
+  }
+
+  // Status: the prompt over the camera (idle), or the one-line caption while live.
   if (notice) {
     setStatus(notice.text, notice.tone)
   } else if (starting) {
-    setStatus('카메라를 여는 중…')
+    setStatus('Opening the camera…')
   } else if (s?.too_large && !s.meta) {
     setStatus(`${tooLargeText(s.too_large.size, s.limit)} · id ${s.too_large.id}`, 'bad')
-  } else if (workerError) {
-    setStatus(workerError, 'warn')
-  } else if (offer && !scanning) {
-    setStatus(offer.restored ? '받은 파일이 남아 있습니다. 저장하거나 공유하세요.' : '수신 완료. 파일을 저장하세요.', 'ok')
   } else if (!scanning) {
-    setStatus(s?.meta ? '일시 정지됨 — 카메라를 다시 시작하면 이어서 받습니다.' : '카메라를 시작하고 송신 화면 전체를 비추세요.')
+    setStatus(offer ? (offer.restored ? 'The file from last time is still here. Save or share it.' : 'Received. Save the file.') : s?.meta ? 'Paused. Start the camera to continue.' : 'Start the camera and frame the whole sender screen')
   } else if (!s?.meta) {
-    setStatus(frames.some((f) => f.grid) ? '격자를 찾았습니다 · 파일 정보를 기다리는 중…' : '송신 화면 전체가 들어오게 비추세요.')
+    setStatus(frames.some((f) => f.grid) ? 'Grid found. Waiting for the file header…' : 'Frame the whole sender screen')
   } else {
-    const remaining = Math.max(0, (need ?? 0) - have)
-    const resumedText = resumed > 0 ? ` · 이어 받기 ${thousands(resumed)}개` : ''
-    setStatus(`남은 조각 ${thousands(remaining)}개 · ${left === null ? '시간 계산 중' : `약 ${formatSeconds(left)}`}${resumedText}`)
+    setStatus(`${thousands(Math.max(0, (need ?? 0) - have))} pieces to go${left === null ? '' : ` · about ${formatSeconds(left)}`}`)
   }
   if (DEBUG && s) debugEl.textContent = JSON.stringify({ ...s, tile_centers: undefined }, null, 1)
 }
@@ -426,7 +503,7 @@ async function startCamera() {
   if (starting || scanning) return
   notice = null
   if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
-    notice = { text: '카메라를 쓸 수 없습니다. HTTPS 또는 localhost로 접속했는지 확인하세요.', tone: 'bad' }
+    notice = { text: 'The camera is unavailable. Open the page over HTTPS or on localhost.', tone: 'bad' }
     queueRender()
     return
   }
@@ -446,13 +523,12 @@ async function startCamera() {
     viewer.classList.add('live')
     frames = []
     session = newSession()
-    startBtn.textContent = '카메라 정지'
     void keepAwake()
     void listCameras()
     schedule(loopGen)
   } catch (err) {
     stopCamera()
-    notice = { text: `카메라를 열지 못했습니다: ${/** @type {Error} */ (err).message}`, tone: 'bad' }
+    notice = { text: `Could not open the camera: ${/** @type {Error} */ (err).message}`, tone: 'bad' }
   } finally {
     starting = false
     startBtn.disabled = false
@@ -481,14 +557,14 @@ async function openCamera(deviceId) {
 
 /**
  * Fills the camera list (labels are only known once the camera is allowed). On
- * an iPhone with several back cameras, a single lens ("후면 카메라") does not
+ * an iPhone with several back cameras, a single lens ("Back Camera") does not
  * switch lenses by itself the way the default multi-lens camera can up close.
  */
 async function listCameras() {
   try {
     const cams = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput')
     const chosen = readCamera()
-    cameraSelect.replaceChildren(new Option('자동 (후면 기본)', ''), ...cams.map((d, i) => new Option(d.label || `카메라 ${i + 1}`, d.deviceId)))
+    cameraSelect.replaceChildren(new Option('Auto (back camera)', ''), ...cams.map((d, i) => new Option(d.label || `Camera ${i + 1}`, d.deviceId)))
     cameraSelect.value = cams.some((d) => d.deviceId === chosen) ? chosen : ''
     cameraSelect.disabled = cams.length === 0
   } catch (err) {
@@ -533,7 +609,6 @@ function stopCamera() {
   stream?.getTracks().forEach((t) => t.stop())
   stream = null
   video.srcObject = null
-  startBtn.textContent = '카메라 시작'
   overlayCtx.clearRect(0, 0, overlay.width, overlay.height)
 }
 
@@ -550,7 +625,6 @@ function finish(file, s) {
   stopCamera()
   const at = Date.now()
   show(blob, name, id, at, false)
-  resultEl.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' })
   if (s.meta) store.remove(s.meta.id).catch(() => {})
   // Kept until the next file or a reset, so closing the tab before saving does not lose it.
   store.keepFile({ id, name, size: blob.size, receivedAt: at, blob }).catch((err) => console.warn('keeping the file failed', err))
@@ -568,18 +642,12 @@ function show(blob, name, id, at, restored) {
   clearOffer()
   const file = new File([blob], name, { type: 'application/octet-stream' })
   offer = { url: URL.createObjectURL(file), name, file, id, at, restored, saved: false }
-  const time = new Date(at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-  resultText.textContent = `✓ SHA-256 확인 · ${name} (${formatBytes(file.size)}) · id ${id}${restored ? ` · ${time}에 받음` : ''}`
-  shareBtn.hidden = !(navigator.canShare?.({ files: [file] }) ?? false)
-  downloadBtn.classList.toggle('primary', shareBtn.hidden)
-  resultEl.hidden = false
   queueRender()
 }
 
 function clearOffer() {
   if (offer) URL.revokeObjectURL(offer.url)
   offer = null
-  resultEl.hidden = true
 }
 
 /** After a reload: the file received earlier and not yet replaced or reset. */
@@ -596,6 +664,7 @@ async function restoreKept() {
 function saveFile() {
   if (!offer) return
   offer.saved = true
+  queueRender()
   const a = document.createElement('a')
   a.href = offer.url
   a.download = offer.name
@@ -613,7 +682,7 @@ async function shareFile() {
     offer.saved = true
     store.dropFile().catch(() => {})
   } catch (err) {
-    if (/** @type {Error} */ (err).name !== 'AbortError') notice = { text: `공유하지 못했습니다: ${/** @type {Error} */ (err).message}`, tone: 'warn' }
+    if (/** @type {Error} */ (err).name !== 'AbortError') notice = { text: `Could not share: ${/** @type {Error} */ (err).message}`, tone: 'warn' }
   }
   queueRender()
 }
@@ -621,7 +690,7 @@ async function shareFile() {
 // --- diagnostics ------------------------------------------------------------------------
 
 /**
- * What `진단 복사` copies: device, camera and recognition numbers. No file name,
+ * What `Copy diagnostics` copies: device, camera and recognition numbers. No file name,
  * content, size or transfer ID, and no device IDs.
  */
 function diagnostics() {
@@ -681,14 +750,14 @@ async function copyDiagnostics() {
   try {
     await navigator.clipboard.writeText(text)
     debugEl.hidden = !DEBUG
-    copyBtn.textContent = '복사했습니다 ✓'
+    copyBtn.textContent = 'Copied ✓'
   } catch {
     // No clipboard (permission, old browser): show it to copy by hand.
     debugEl.hidden = false
     debugEl.textContent = text
-    copyBtn.textContent = '아래 글을 길게 눌러 복사하세요'
+    copyBtn.textContent = 'Long-press the text below to copy'
   }
-  setTimeout(() => (copyBtn.textContent = '진단 복사'), 3000)
+  setTimeout(() => (copyBtn.textContent = 'Copy diagnostics'), 3000)
 }
 
 // --- resume (IndexedDB) -------------------------------------------------------------------
@@ -770,17 +839,15 @@ function reset() {
   exportedKept = 0
   failedSeen = 0
   workerError = ''
-  fileNameEl.textContent = '—'
-  fileSizeEl.textContent = ''
-  fileIdEl.textContent = ''
+  viewer.classList.remove('detected')
   overlayCtx.clearRect(0, 0, overlay.width, overlay.height)
   queueRender()
 }
 
 startBtn.addEventListener('click', () => (scanning ? (stopCamera(), queueRender()) : void startCamera()))
 // Start over: the collected tiles and the kept file both go.
-$('reset').addEventListener('click', () => {
-  if (offer && !offer.saved && !confirm('받은 파일을 아직 저장하지 않았습니다. 지울까요?')) return
+resetBtn.addEventListener('click', () => {
+  if (offer && !offer.saved && !confirm('The received file is not saved yet. Discard it?')) return
   notice = null
   reset()
   clearOffer()
@@ -789,6 +856,24 @@ $('reset').addEventListener('click', () => {
 downloadBtn.addEventListener('click', saveFile)
 shareBtn.addEventListener('click', () => void shareFile())
 copyBtn.addEventListener('click', () => void copyDiagnostics())
+// Sheets: native dialogs; a tap on the backdrop closes them.
+/** @type {[HTMLElement, HTMLDialogElement][]} */
+const sheets = [
+  [$('sender-btn'), senderSheet],
+  [$('stats-btn'), statsSheet],
+]
+for (const [btn, sheet] of sheets) {
+  btn.addEventListener('click', () => sheet.showModal())
+  sheet.querySelector('.close')?.addEventListener('click', () => sheet.close())
+  sheet.addEventListener('click', (e) => {
+    if (e.target === sheet) sheet.close()
+  })
+}
+$('send-link').addEventListener('click', () => {
+  const url = location.origin + location.pathname
+  if (navigator.share) navigator.share({ title: 'DiodeCam', text: 'DiodeCam setup and sender downloads', url }).catch(() => {})
+  else navigator.clipboard?.writeText(url).catch(() => {})
+})
 cameraSelect.addEventListener('change', () => {
   writeCamera(cameraSelect.value)
   if (!scanning) return
