@@ -57,21 +57,8 @@ pub fn run(args: &FramesArgs) -> Result<(), String> {
         let grid = frame::render(&layout, &tx.next_frame(&layout));
         let status = status::lines(
             &Status {
-                name: &name,
-                size: meta.size,
-                payload: tx.payload_len(),
-                compression: meta.compression,
-                id: tx.id(),
-                profile,
-                grid: Some((layout.width(), layout.height(), layout.tiles())),
                 elapsed: Duration::from_secs_f64(f as f64 / DEFAULT_FPS as f64),
-                source_progress: tx.source_progress(),
-                repair_sent: tx.repair_sent(),
-                source_symbols: tx.source_symbols(),
-                target_fps: DEFAULT_FPS,
-                actual_fps: None,
-                paused: false,
-                notice: None,
+                ..Status::for_transfer(&tx, profile, Some(&layout), DEFAULT_FPS)
             },
             cols,
         );

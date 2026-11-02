@@ -5,7 +5,7 @@ use std::time::Duration;
 use diodecam_core::meta::Compression;
 use diodecam_core::sender::{data_tiles_per_frame, view_seconds};
 use diodecam_core::tile::CONTENT_BYTES;
-use diodecam_core::Profile;
+use diodecam_core::{Layout, Profile, Transfer};
 
 /// What the status bar shows; the sender fills it in every frame.
 pub struct Status<'a> {
@@ -27,6 +27,32 @@ pub struct Status<'a> {
     pub paused: bool,
     /// Shown in place of the key hints, e.g. the 30-fps phase-lock hint.
     pub notice: Option<&'a str>,
+}
+
+impl<'a> Status<'a> {
+    /// The transfer-derived fields (the META name, as `send` shows it); the clock
+    /// starts at zero, with no measured fps, not paused and no notice. Callers set
+    /// their own fields with struct-update syntax.
+    pub fn for_transfer(tx: &'a Transfer, profile: Profile, layout: Option<&Layout>, fps: u32) -> Self {
+        let meta = tx.meta();
+        Status {
+            name: &meta.filename,
+            size: meta.size,
+            payload: tx.payload_len(),
+            compression: meta.compression,
+            id: tx.id(),
+            profile,
+            grid: layout.map(|l| (l.width(), l.height(), l.tiles())),
+            elapsed: Duration::ZERO,
+            source_progress: tx.source_progress(),
+            repair_sent: tx.repair_sent(),
+            source_symbols: tx.source_symbols(),
+            target_fps: fps,
+            actual_fps: None,
+            paused: false,
+            notice: None,
+        }
+    }
 }
 
 /// Both lines, each at most `cols − 1` characters. When they do not fit, the
@@ -239,5 +265,18 @@ mod tests {
         assert_eq!(approx(165.0), "~2m45s");
         assert_eq!(approx(3900.0), "~1h05m");
         assert_eq!(ascii("보고서.pdf"), "???.pdf");
+    }
+
+    #[test]
+    fn builder_shows_the_meta_name() {
+        use diodecam_core::SendOptions;
+        let name = "a-very-long-file-name-for-the-status-bar.txt"; // 44 bytes, over the META limit
+        let tx = Transfer::prepare(&[7u8; 300], name, SendOptions { compress: false }, 0).unwrap();
+        let layout = Layout::for_terminal(Profile::Ssh, 120, 40).unwrap();
+        let s = Status::for_transfer(&tx, Profile::Ssh, Some(&layout), 24);
+        assert_eq!(s.name, tx.meta().filename);
+        assert!(s.name.len() <= 38 && s.name.ends_with(".txt") && name.starts_with(s.name.trim_end_matches(".txt")));
+        assert_eq!((s.size, s.id, s.target_fps, s.grid), (300, tx.id(), 24, Some((119, 76, 7))));
+        assert!(lines(&s, 120)[0].contains(s.name));
     }
 }
