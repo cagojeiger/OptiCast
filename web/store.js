@@ -143,18 +143,6 @@ export async function remove(id) {
 }
 
 /**
- * The saved metadata for `id`, if any.
- * @param {string} id
- * @returns {Promise<SavedMeta | undefined>}
- */
-export function info(id) {
-  return transaction('readonly', (meta) => {
-    const req = meta.get(id)
-    return () => req.result
-  })
-}
-
-/**
  * The saved entry for `id`; a malformed one is deleted and reported as absent.
  * @param {string} id
  * @returns {Promise<(SavedMeta & { data: ArrayBuffer }) | undefined>}
@@ -175,20 +163,33 @@ export async function load(id) {
 }
 
 /**
- * Saves an export, then evicts old or excess entries (never this one).
+ * Saves an export, then evicts old or excess entries (never this one). With `only`, it is
+ * written only if `only(stored)` holds for the entry stored under its id, read in the same
+ * readwrite transaction as the write: no other transaction on these stores (a reset's
+ * `remove`) can run between the decision and the put.
  * @param {{ id: string, name: string, size: number, savedAt: number, data: ArrayBuffer }} entry
+ * @param {{ only?: (stored: SavedMeta | undefined) => boolean }} [options]
+ * @returns {Promise<boolean>} Whether the entry was written.
  */
-export async function save(entry) {
+export async function save(entry, { only } = {}) {
   const tiles = exportTiles(entry.data)
-  if (tiles < 0) return
+  if (tiles < 0) return false
   /** @type {SavedMeta} */
   const record = { id: entry.id, name: entry.name, size: entry.size, savedAt: entry.savedAt, tiles, bytes: entry.data.byteLength }
-  await transaction('readwrite', (meta, store) => {
-    meta.put(record)
-    store.put(entry.data, entry.id)
-    return () => undefined
+  const written = await transaction('readwrite', (meta, store) => {
+    let put = false
+    const req = meta.get(entry.id)
+    // Requests made in a success callback belong to the same transaction.
+    req.onsuccess = () => {
+      if (only && !only(/** @type {SavedMeta | undefined} */ (req.result))) return
+      meta.put(record)
+      store.put(entry.data, entry.id)
+      put = true
+    }
+    return () => put
   })
-  await evict(entry.id)
+  if (written) await evict(entry.id)
+  return written
 }
 
 /** @param {string | null} [keep] */

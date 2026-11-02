@@ -12,7 +12,7 @@ import { cameraView, framing, tear, toRgba } from '../tools/sim/camera.ts'
 import { randomBytes, senderFrames } from '../tools/sim/sender.ts'
 import { VTerm } from '../tools/sim/vterm.ts'
 import { MIN_MODULE_PX, captureWidth, eta, failure, formatBytes, formatSeconds, fps, hint, limitMib, moduleSize, quantile, recognition, safeName, scanWidth, symbolRate, tooLargeText, trim, type FrameSample, type Stage } from '../web/metrics.js'
-import { evictable, exportTiles, keepable, shouldSave, type KeptFile, type SavedMeta } from '../web/store.js'
+import { evictable, exportTiles, keepable, load, remove, save, shouldSave, type KeptFile, type SavedMeta } from '../web/store.js'
 import { diagnostics, view, type DiagnosticsSnapshot, type View, type ViewState } from '../web/view.js'
 import { OUT_OF_MEMORY, WasmReceiver, type ReceiverStats } from '../web/wasm.js'
 
@@ -441,6 +441,101 @@ describe('resume store', () => {
     assert.equal(shouldSave(saved, 49), false)
     assert.equal(shouldSave(saved, 50), true, 'the same count is saved again (fresh savedAt)')
     assert.equal(shouldSave(saved, 51), true)
+  })
+
+  /**
+   * Just enough IndexedDB for store.js, in memory: every request succeeds in a task of its own,
+   * in the order made, and a transaction completes once its last request has. `slowNextOpen`
+   * delays the next connection, so a transaction asked for later can be created first.
+   */
+  const fakeIndexedDB = () => {
+    const stores = new Map<string, { keyPath?: string; rows: Map<unknown, unknown> }>()
+    const db = {
+      get objectStoreNames() {
+        return Object.assign([...stores.keys()], { contains: (n: string) => stores.has(n) })
+      },
+      createObjectStore: (name: string, o?: { keyPath?: string }) => stores.set(name, { keyPath: o?.keyPath, rows: new Map() }),
+      deleteObjectStore: (name: string) => stores.delete(name),
+      close: () => {},
+      transaction: () => {
+        let open = 0
+        const tx: { oncomplete: (() => void) | null; objectStore?: (name: string) => object } = { oncomplete: null }
+        const request = (run: () => unknown) => {
+          const req: { result: unknown; onsuccess: (() => void) | null } = { result: undefined, onsuccess: null }
+          open++
+          setTimeout(() => {
+            req.result = run()
+            req.onsuccess?.() // may make more requests in this transaction
+            if (--open === 0) setTimeout(() => tx.oncomplete?.())
+          })
+          return req
+        }
+        tx.objectStore = (name: string) => {
+          const s = stores.get(name)!
+          return {
+            get: (k: unknown) => request(() => s.rows.get(k)),
+            getAll: () => request(() => [...s.rows.values()]),
+            put: (v: Record<string, unknown>, k?: unknown) => request(() => void s.rows.set(s.keyPath ? v[s.keyPath] : k, v)),
+            delete: (k: unknown) => request(() => void s.rows.delete(k)),
+            clear: () => request(() => s.rows.clear()),
+          }
+        }
+        return tx
+      },
+    }
+    let upgraded = false
+    let delay = 0
+    return {
+      slowNextOpen: (ms: number) => (delay = ms),
+      open: () => {
+        const req: { result: typeof db; onsuccess: (() => void) | null; onupgradeneeded: ((e: { oldVersion: number }) => void) | null } = { result: db, onsuccess: null, onupgradeneeded: null }
+        setTimeout(() => {
+          if (!upgraded) req.onupgradeneeded?.({ oldVersion: 0 })
+          upgraded = true
+          req.onsuccess?.()
+        }, delay)
+        delay = 0
+        return req
+      },
+    }
+  }
+  const entry = (tiles: number) => ({ id: 'a', name: 'a.bin', size: 1, savedAt: Date.now(), data: exp(tiles) })
+
+  it('decides a save against the entry read in its own transaction', async () => {
+    Object.assign(globalThis, { indexedDB: fakeIndexedDB() })
+    try {
+      assert.equal(await save(entry(5)), true)
+      const seen: (SavedMeta | undefined)[] = []
+      const only = (count: number) => (stored: SavedMeta | undefined) => (seen.push(stored), shouldSave(stored, count))
+      assert.equal(await save(entry(3), { only: only(3) }), false, 'never a smaller export over a saved entry')
+      assert.equal(seen[0]?.tiles, 5)
+      assert.equal((await load('a'))?.tiles, 5)
+      assert.equal(await save(entry(7), { only: only(7) }), true)
+      assert.equal((await load('a'))?.tiles, 7)
+    } finally {
+      Reflect.deleteProperty(globalThis, 'indexedDB')
+    }
+  })
+
+  it('a reset after a save started wins: the save does not bring the entry back', async () => {
+    const idb = fakeIndexedDB()
+    Object.assign(globalThis, { indexedDB: idb })
+    try {
+      let gen = 0
+      await save(entry(5))
+      // main.js saveProgress, then reset() before the save's transaction exists; the reset's
+      // remove even runs first. The check runs inside the save's transaction and sees the bump.
+      const started = gen
+      idb.slowNextOpen(20)
+      const saving = save(entry(9), { only: (stored) => started === gen && shouldSave(stored, 9) })
+      gen++ // reset()
+      const removing = remove('a')
+      assert.equal(await saving, false)
+      await removing
+      assert.equal(await load('a'), undefined)
+    } finally {
+      Reflect.deleteProperty(globalThis, 'indexedDB')
+    }
   })
 
   it('offers the received file for 24 hours at most (the privacy.html promise)', () => {
