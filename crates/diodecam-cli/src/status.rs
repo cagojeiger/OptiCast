@@ -29,11 +29,11 @@ pub struct Status<'a> {
     pub notice: Option<&'a str>,
 }
 
-impl Status<'_> {
+impl<'a> Status<'a> {
     /// The transfer-derived fields (the META name, as `send` shows it); the clock
     /// starts at zero, with no measured fps, not paused and no notice. Callers set
     /// their own fields with struct-update syntax.
-    pub fn for_transfer<'a>(tx: &'a Transfer, profile: Profile, layout: Option<&Layout>, fps: u32) -> Status<'a> {
+    pub fn for_transfer(tx: &'a Transfer, profile: Profile, layout: Option<&Layout>, fps: u32) -> Self {
         let meta = tx.meta();
         Status {
             name: &meta.filename,
@@ -265,5 +265,18 @@ mod tests {
         assert_eq!(approx(165.0), "~2m45s");
         assert_eq!(approx(3900.0), "~1h05m");
         assert_eq!(ascii("보고서.pdf"), "???.pdf");
+    }
+
+    #[test]
+    fn builder_shows_the_meta_name() {
+        use diodecam_core::SendOptions;
+        let name = "a-very-long-file-name-for-the-status-bar.txt"; // 44 bytes, over the META limit
+        let tx = Transfer::prepare(&[7u8; 300], name, SendOptions { compress: false }, 0).unwrap();
+        let layout = Layout::for_terminal(Profile::Ssh, 120, 40).unwrap();
+        let s = Status::for_transfer(&tx, Profile::Ssh, Some(&layout), 24);
+        assert_eq!(s.name, tx.meta().filename);
+        assert!(s.name.len() <= 38 && s.name.ends_with(".txt") && name.starts_with(s.name.trim_end_matches(".txt")));
+        assert_eq!((s.size, s.id, s.target_fps, s.grid), (300, tx.id(), 24, Some((119, 76, 7))));
+        assert!(lines(&s, 120)[0].contains(s.name));
     }
 }
