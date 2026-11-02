@@ -1,7 +1,7 @@
 // The receiver (web/): the screen's rolling metrics, the resume store's pure
 // rules, and the WebAssembly receiver fed with real sender frames through the
 // terminal and camera simulators. The wasm test needs `pnpm wasm` and a built
-// `diodecam` binary; it is skipped (with a note) when they are missing.
+// `diodecam` binary; locally it is skipped (with a note) when they are missing, in CI it fails.
 
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
@@ -330,7 +330,8 @@ function senderBinary(): string | null {
   return built.find((p) => spawnSync(p, ['frames', '--help']).status === 0) ?? null
 }
 const BIN = senderBinary()
-const skip = !existsSync(WASM) ? 'web/diodecam.wasm missing: run `pnpm wasm`' : !BIN ? 'diodecam binary missing: run `cargo build -p diodecam-cli`' : false
+// Locally a missing build skips the suite with a note; in CI it must run, so a missing build fails.
+const skip = process.env.CI ? false : !existsSync(WASM) ? 'web/diodecam.wasm missing: run `pnpm wasm`' : !BIN ? 'diodecam binary missing: run `cargo build -p diodecam-cli`' : false
 
 describe('wasm receiver', { skip }, () => {
   it('restores a file from simulated camera frames, ignoring torn ones', { timeout: 60_000 }, async () => {

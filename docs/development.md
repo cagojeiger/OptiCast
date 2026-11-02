@@ -33,7 +33,7 @@ pnpm serve                             # http://localhost:5173 에서 수신기 
 node tools/icons.ts                    # web/icon.svg 와 icon-*.png 다시 만들기
 node tools/qr.ts                       # web/qr.svg (수신기 주소 QR, 데스크톱 설정 페이지용) 다시 만들기
 node tools/terminal-example.ts         # web/example-terminal.svg (설정 페이지의 송신 화면 예시, 실제 프레임) 다시 만들기
-node tools/floor.ts [cols] [rows]      # 디코더 바닥: 모듈 px × 블러별 타일 인식률 (vision 변경 전후 비교 기준선)
+node tools/floor.ts [cols] [rows]      # 디코더 바닥: 모듈 px × 블러별 타일 인식률 (vision 변경 전후 비교 기준선, 송신기와 wasm을 먼저 빌드)
 ```
 
 rustup 기본 툴체인이 x86_64인 Mac에서는 cargo 앞에 `RUSTUP_TOOLCHAIN=stable-aarch64-apple-darwin
@@ -54,11 +54,12 @@ pnpm e2e --headed --hold 20            # 보이는 Chrome 으로 시연
 
 ## 배포와 릴리스
 
-- `.github/workflows/ci.yml`: PR과 `main`에서 rustfmt, clippy, cargo test, typecheck, WASM 빌드, JS 테스트. `main`이면 통과한
-  WASM과 `web/`을 복사하고 `__V__`를 커밋 해시로, `__VERSION__`을 `Cargo.toml`의 버전으로 바꿔 GitHub Pages에 배포한다. 테스트가 깨진 커밋은 배포되지 않고,
+- `.github/workflows/ci.yml`: PR과 `main`에서 typecheck, rustfmt, clippy, cargo test, WASM 빌드, JS 테스트(CI에서는 wasm 수신기 테스트를
+  건너뛰지 않는다), 사이트 조립. 조립은 통과한 WASM과 `web/`을 복사하고 `__V__`를 커밋 해시로, `__VERSION__`을 `Cargo.toml`의 버전으로
+  바꾸며, 버전을 못 읽거나 자리표시자가 남으면 실패한다. `main`이면 그 사이트를 GitHub Pages에 배포한다. 테스트가 깨진 커밋은 배포되지 않고,
   같은 브랜치에서는 실행이 한 번에 하나만 돈다. 새 push는 도는 실행을 기다리지만 기다리는 실행은 하나만 남으므로,
   그 사이에 더 새 push가 오면 기다리던 실행은 취소되고 가장 새 커밋만 배포된다(옛 실행을 다시 돌리면 그 커밋이 다시 배포된다).
   커밋 해시가 오프라인 캐시 이름이 되므로 새 배포는 다음 온라인 접속에서 옛 캐시를 대체한다.
-- `v*` 태그 → `.github/workflows/release.yml`: `diodecam-<target>.tar.gz`(+ sha256) 4종을 릴리스에 올린다.
+- `v*` 태그 → `.github/workflows/release.yml`: 태그 커밋이 테스트(cargo test, typecheck, WASM 빌드와 JS 테스트)를 통과하면 `diodecam-<target>.tar.gz`(+ sha256) 4종을 릴리스에 올린다.
   파일 이름에 버전이 없으므로 `releases/latest/download/…` 주소가 고정이다.
 - PR은 squash 머지하고, 커밋 제목은 `type(scope): 설명 (#N)`이다.
