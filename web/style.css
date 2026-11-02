@@ -726,15 +726,22 @@ html[data-view='receiver'] #setup {
   padding-bottom: 20px;
 }
 
-.setup section.card {
+.setup-grid > .card {
   flex: 1 1 320px;
   min-width: 0;
 }
 
-.setup .fold.wide {
-  max-width: 1200px;
-  margin: 0 auto;
+.setup > .card.wide,
+.setup > .fold.wide {
+  max-width: calc(1200px - 64px);
+  margin-left: auto;
+  margin-right: auto;
   width: calc(100% - 64px);
+  padding: 24px;
+}
+
+.setup > .fold.wide {
+  padding: 0 16px;
 }
 
 .file-field {
@@ -794,14 +801,6 @@ html[data-view='receiver'] #setup {
   margin: 12px 0;
 }
 
-.guide {
-  margin: 0;
-  padding-left: 18px;
-  display: grid;
-  gap: 6px;
-  font-size: 14px;
-  color: var(--text-2);
-}
 
 .sheet .code {
   display: flex;
@@ -875,13 +874,6 @@ html[data-view='receiver'] #setup {
   gap: 8px;
 }
 
-.pill {
-  font-size: 12px;
-  font-weight: 400;
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: var(--secondary);
-}
 
 .setup p {
   margin: 0;
@@ -921,53 +913,10 @@ html[data-view='receiver'] #setup {
   font-weight: 600;
 }
 
-.subcard {
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--bg);
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
 
-.row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
 
-a.button {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 0 16px;
-  border-radius: 10px;
-  border: 1px solid var(--secondary);
-  background: var(--secondary);
-  color: var(--text);
-  text-decoration: none;
-  font-size: 14px;
-  font-weight: 600;
-}
 
-a.button.primary {
-  background: var(--invert-bg);
-  border-color: var(--invert-bg);
-  color: var(--invert-text);
-}
 
-a.button svg {
-  width: 16px;
-  height: 16px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
 
 .code {
   display: flex;
@@ -1017,10 +966,12 @@ a.button svg {
 
 @media (max-width: 720px) {
   .setup > * {
-    padding: 0 16px;
+    padding-left: 16px;
+    padding-right: 16px;
   }
 
-  .setup .fold.wide {
+  .setup > .card.wide,
+  .setup > .fold.wide {
     width: calc(100% - 32px);
   }
 }
