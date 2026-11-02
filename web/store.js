@@ -70,6 +70,26 @@ export function evictable(entries, now, keep) {
   return out
 }
 
+/**
+ * Whether a new export of `count` tiles may replace the `stored` entry: never
+ * with fewer tiles (an export made while saved tiles were being re-imported).
+ * @param {SavedMeta | undefined} stored
+ * @param {number} count
+ */
+export function shouldSave(stored, count) {
+  return !stored || stored.tiles <= count
+}
+
+/**
+ * Whether the kept file may still be offered: received at most a day ago, with its bytes as a Blob.
+ * @param {KeptFile | undefined} file
+ * @param {number} now
+ * @returns {file is KeptFile}
+ */
+export function keepable(file, now) {
+  return !!file && now - file.receivedAt <= KEEP_FILE_MS && file.blob instanceof Blob
+}
+
 /** @returns {Promise<IDBDatabase>} */
 function open() {
   return new Promise((resolve, reject) => {
@@ -222,7 +242,7 @@ export async function keptFile(now = Date.now()) {
     [FILES],
   )
   const file = all.sort((a, b) => b.receivedAt - a.receivedAt)[0]
-  if (file && now - file.receivedAt <= KEEP_FILE_MS && file.blob instanceof Blob && (await readable(file.blob))) return file
+  if (keepable(file, now) && (await readable(file.blob))) return file
   if (all.length) await dropFile()
   return undefined
 }
