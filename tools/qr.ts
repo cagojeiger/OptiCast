@@ -10,12 +10,13 @@ import { writeFileSync } from 'node:fs'
 const URL_DEFAULT = 'https://cagojeiger.github.io/diodecam/'
 const EC = 'M'
 
-// --- tables (versions 1–10 are plenty for a short URL) ----------------------------
+// --- tables (versions 1–6: up to 106 bytes at level M, plenty for a URL) -----------
 // [total codewords, ec codewords per block, blocks in group 1, data codewords per block, blocks in group 2]
+// Versions 1–6 only: from 7 up a QR also carries version-information blocks, not written here.
 const PARAMS: Record<string, number[][]> = {
-  M: [[26, 10, 1, 16, 0], [44, 16, 1, 28, 0], [70, 26, 1, 44, 0], [100, 18, 2, 32, 0], [134, 24, 2, 43, 0], [172, 16, 4, 27, 0], [196, 18, 4, 31, 0], [242, 22, 2, 38, 2], [292, 22, 3, 36, 2], [346, 26, 4, 43, 1]],
+  M: [[26, 10, 1, 16, 0], [44, 16, 1, 28, 0], [70, 26, 1, 44, 0], [100, 18, 2, 32, 0], [134, 24, 2, 43, 0], [172, 16, 4, 27, 0]],
 }
-const ALIGN: number[][] = [[], [6, 18], [6, 22], [6, 26], [6, 30], [6, 34], [6, 22, 38], [6, 24, 42], [6, 26, 46], [6, 28, 50]]
+const ALIGN: number[][] = [[], [6, 18], [6, 22], [6, 26], [6, 30], [6, 34]]
 const EC_BITS: Record<string, number> = { L: 1, M: 0, Q: 3, H: 2 }
 
 // --- GF(256) ---------------------------------------------------------------------
@@ -53,7 +54,7 @@ function rsParity(data: number[], n: number): number[] {
 // --- bit stream, version choice, codewords ---------------------------------------
 function codewords(text: string, ec: string): { version: number; words: number[] } {
   const bytes = [...Buffer.from(text, 'utf8')]
-  for (let v = 1; v <= 10; v++) {
+  for (let v = 1; v <= PARAMS[ec]!.length; v++) {
     const [total, ecPer, g1, d1, g2] = PARAMS[ec]![v - 1]!
     const dataWords = g1! * d1! + g2! * (d1! + 1)
     const countBits = v <= 9 ? 8 : 16
@@ -84,7 +85,7 @@ function codewords(text: string, ec: string): { version: number; words: number[]
     if (words.length !== total) throw new Error('codeword count')
     return { version: v, words }
   }
-  throw new Error('too long for version 10')
+  throw new Error('too long: at most 106 bytes (version 6, level M)')
 }
 
 // --- matrix ----------------------------------------------------------------------
@@ -186,8 +187,8 @@ function writeFormat(m: number[][], ec: string, mask: number, n: number) {
   m[8]![8] = bit(7)
   m[7]![8] = bit(6)
   for (let i = 0; i < 6; i++) m[5 - i]![8] = bit(5 - i)
-  for (let i = 0; i < 8; i++) m[n - 1 - i]![8] = bit(14 - i)
-  for (let i = 0; i < 7; i++) m[8]![n - 7 + i] = bit(6 - i)
+  for (let i = 0; i < 7; i++) m[n - 1 - i]![8] = bit(14 - i)
+  for (let i = 0; i < 8; i++) m[8]![n - 8 + i] = bit(7 - i)
   m[n - 8]![8] = 1
 }
 
@@ -231,16 +232,16 @@ function penalty(m: number[][]): number {
 }
 
 // --- SVG -------------------------------------------------------------------------
-function svg(m: number[][]): string {
+function svg(m: number[][], url: string): string {
   const n = m.length
   const q = 4 // quiet zone
   let d = ''
   for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (m[y]![x] === 1) d += `M${x + q} ${y + q}h1v1h-1z`
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${n + 2 * q} ${n + 2 * q}" shape-rendering="crispEdges" role="img" aria-label="QR code: ${URL_DEFAULT}"><rect width="100%" height="100%" fill="#fff"/><path d="${d}" fill="#171717"/></svg>\n`
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${n + 2 * q} ${n + 2 * q}" shape-rendering="crispEdges" role="img" aria-label="QR code: ${url}"><rect width="100%" height="100%" fill="#fff"/><path d="${d}" fill="#171717"/></svg>\n`
 }
 
 const url = process.argv[2] ?? URL_DEFAULT
 const { version, words } = codewords(url, EC)
 const m = matrix(version, words, EC)
-writeFileSync('web/qr.svg', svg(m))
+writeFileSync('web/qr.svg', svg(m, url))
 console.log(`qr       web/qr.svg  version ${version} (${m.length}×${m.length}), ${url}`)

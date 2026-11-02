@@ -1,36 +1,48 @@
-// App icons (web/icon-*.png): the frame's corner marks — three 7×7 finders and
-// the small 5×5 one — on the receiver's background, inside the middle 60 % so
-// the 512 px one also works as a maskable icon. Plain RGB PNG, no dependencies.
+// App icons (web/icon-*.png) and the favicon (web/icon.svg): a lens ring with the
+// grid the camera reads inside it, on the dark background (DESIGN.md). The motif
+// sits inside the middle 70 % so the 512 px one also works as a maskable icon.
+// Plain RGB PNG with 4× supersampling, no dependencies.
 //
-// usage: node tools/icons.ts   (writes web/icon-180.png, icon-192.png, icon-512.png)
+// usage: node tools/icons.ts   (writes web/icon.svg, icon-180.png, icon-192.png, icon-512.png)
 
 import { writeFileSync } from 'node:fs'
 import { crc32, deflateSync } from 'node:zlib'
 
 const BG = [0x17, 0x17, 0x17]
-const FG = [0x34, 0xd3, 0x99]
-const SPAN = 17 // modules: finder 7 + gap 3 + finder 7
+const RING = [0xec, 0xec, 0xec]
+const GRID = [0x34, 0xd3, 0x99]
 
-/** Module (x, y) of the 17×17 motif is lit. */
-function lit(x: number, y: number): boolean {
-  const finder = (fx: number, fy: number, n: number) => {
-    const [dx, dy] = [x - fx, y - fy]
-    if (dx < 0 || dy < 0 || dx >= n || dy >= n) return null
-    const ring = Math.min(dx, dy, n - 1 - dx, n - 1 - dy)
-    return ring !== 1 // outer ring and centre lit, the ring between dark
-  }
-  return finder(0, 0, 7) ?? finder(10, 0, 7) ?? finder(0, 10, 7) ?? finder(11, 11, 5) ?? false
+// Geometry in a 100-unit box: ring centre (50, 50), radius 34, stroke 6; five 8-unit cells.
+const RING_R = 34
+const RING_W = 6
+const CELLS: [number, number][] = [[37, 37], [55, 37], [46, 46], [37, 55], [55, 55]]
+const CELL = 8
+
+/** Colour at (x, y) in the 100-unit box. */
+function colour(x: number, y: number): number[] {
+  for (const [cx, cy] of CELLS) if (x >= cx && x < cx + CELL && y >= cy && y < cy + CELL) return GRID
+  const d = Math.hypot(x - 50, y - 50)
+  if (Math.abs(d - RING_R) <= RING_W / 2) return RING
+  return BG
 }
 
 function png(size: number): Buffer {
-  const module = Math.floor((size * 0.6) / SPAN)
-  const origin = Math.floor((size - module * SPAN) / 2)
+  const ss = 4 // samples per axis per pixel
   const raw = Buffer.alloc((size * 3 + 1) * size)
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-      const [mx, my] = [Math.floor((x - origin) / module), Math.floor((y - origin) / module)]
-      const on = x >= origin && y >= origin && mx < SPAN && my < SPAN && lit(mx, my)
-      raw.set(on ? FG : BG, y * (size * 3 + 1) + 1 + x * 3)
+      let r = 0
+      let g = 0
+      let b = 0
+      for (let sy = 0; sy < ss; sy++)
+        for (let sx = 0; sx < ss; sx++) {
+          const c = colour(((x + (sx + 0.5) / ss) / size) * 100, ((y + (sy + 0.5) / ss) / size) * 100)
+          r += c[0]!
+          g += c[1]!
+          b += c[2]!
+        }
+      const acc = [r, g, b]
+      raw.set(acc.map((v) => Math.round(v / (ss * ss))), y * (size * 3 + 1) + 1 + x * 3)
     }
   }
   const chunk = (type: string, data: Buffer) => {
@@ -53,4 +65,11 @@ function png(size: number): Buffer {
   ])
 }
 
+const hex = (c: number[]) => `#${c.map((v) => v.toString(16).padStart(2, '0')).join('')}`
+const svg =
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="${hex(BG)}"/>` +
+  `<circle cx="50" cy="50" r="${RING_R}" fill="none" stroke="${hex(RING)}" stroke-width="${RING_W}"/>` +
+  `<g fill="${hex(GRID)}">${CELLS.map(([x, y]) => `<rect x="${x}" y="${y}" width="${CELL}" height="${CELL}"/>`).join('')}</g></svg>\n`
+writeFileSync('web/icon.svg', svg)
 for (const size of [180, 192, 512]) writeFileSync(`web/icon-${size}.png`, png(size))
+console.log('icons    web/icon.svg, icon-180.png, icon-192.png, icon-512.png')

@@ -8,22 +8,22 @@
     <meta name="color-scheme" content="light dark" />
     <meta name="apple-mobile-web-app-title" content="DiodeCam" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <title>DiodeCam Receiver</title>
+    <title>DiodeCam</title>
     <link rel="manifest" href="./manifest.webmanifest?v=__V__" />
-    <link rel="icon" href="./icon-192.png?v=__V__" />
+    <link rel="icon" href="./icon.svg?v=__V__" type="image/svg+xml" />
+    <link rel="icon" href="./icon-192.png?v=__V__" type="image/png" sizes="192x192" />
     <link rel="apple-touch-icon" href="./icon-180.png?v=__V__" />
     <link rel="stylesheet" href="./style.css?v=__V__" />
     <script>
-      // Desktop (a fine pointer that hovers) gets the setup page; phones get the receiver.
-      // `?receiver=1` forces the receiver (the e2e runs in desktop Chrome). Set before paint.
-      // Only that view's script loads: the setup page never fetches the worker or the wasm.
-      const view =
-        new URLSearchParams(location.search).get('receiver') === '1' || !matchMedia('(hover: hover) and (pointer: fine)').matches ? 'receiver' : 'setup'
-      document.documentElement.dataset.view = view
-      const script = document.createElement('script')
-      script.type = 'module'
-      script.src = view === 'setup' ? './setup.js?v=__V__' : './main.js?v=__V__'
-      document.head.append(script)
+      // Desktop (a fine pointer that hovers) gets the setup page; phones, and the
+      // home-screen app, get the receiver. `?receiver=1` forces the receiver (the
+      // e2e runs in desktop Chrome). Decided before paint; the script loads at the end of body.
+      {
+        const forced = new URLSearchParams(location.search).get('receiver') === '1'
+        const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true
+        const desktop = matchMedia('(hover: hover) and (pointer: fine)').matches
+        document.documentElement.dataset.view = forced || standalone || !desktop ? 'receiver' : 'setup'
+      }
     </script>
   </head>
   <body>
@@ -164,7 +164,7 @@ tar xzf diodecam-x86_64-unknown-linux-musl.tar.gz</pre><button type="button" cla
         </div>
         <aside class="card">
           <h2><span class="step">3</span>Receive on a phone</h2>
-          <img class="qr" src="./qr.svg?v=__V__" width="232" height="232" alt="QR code for https://cagojeiger.github.io/diodecam/" />
+          <img class="qr" src="./qr.svg?v=__V__" width="232" height="232" alt="QR code for the receiver address" />
           <p>Scan with the phone camera to open the receiver. In Safari, Share → Add to Home Screen makes it work offline.</p>
           <p class="muted">The receiver uploads nothing and never opens the received file; it is saved only when you tap Share or Download.</p>
           <a class="muted" href="./?receiver=1">Open the receiver here anyway ›</a>

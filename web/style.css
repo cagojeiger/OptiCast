@@ -663,7 +663,8 @@ dd {
 /* --- view switch: phone = receiver, desktop = setup page ---------------------------- */
 
 html[data-view='setup'] main,
-html[data-view='setup'] .sheet {
+html[data-view='setup'] .sheet,
+html:not([data-view]) #setup {
   display: none;
 }
 
@@ -842,6 +843,7 @@ a.button {
   min-height: 44px;
   padding: 0 16px;
   border-radius: 10px;
+  border: 1px solid var(--secondary);
   background: var(--secondary);
   color: var(--text);
   text-decoration: none;
@@ -851,6 +853,7 @@ a.button {
 
 a.button.primary {
   background: var(--invert-bg);
+  border-color: var(--invert-bg);
   color: var(--invert-text);
 }
 
@@ -910,7 +913,7 @@ a.button svg {
   color: var(--muted);
 }
 
-@media (hover: hover) and (pointer: fine) {
+@media (hover: hover) and (pointer: fine) and (min-height: 541px) {
   html[data-view='receiver'] main {
     /* The forced receiver on a desktop: phone proportions, not a wall of camera. */
     max-width: 480px;

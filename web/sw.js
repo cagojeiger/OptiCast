@@ -18,6 +18,7 @@ const FILES = [
   'main.js',
   'setup.js',
   'qr.svg',
+  'icon.svg',
   'metrics.js',
   'store.js',
   'worker.js',

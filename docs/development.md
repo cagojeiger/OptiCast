@@ -24,7 +24,7 @@ cargo test -p diodecam-cli --test tmux_probe -- --ignored   # 실제 tmux 화면
 pnpm install && pnpm typecheck         # JSDoc 타입 검사 (tsc, 빌드 아님)
 pnpm wasm && pnpm test                 # web/diodecam.wasm 빌드 후 JS 테스트
 pnpm serve                             # http://localhost:5173 에서 수신기 (오프라인 캐시 없음: sw.js는 배포본에서만)
-node tools/icons.ts                    # web/icon-*.png 다시 만들기
+node tools/icons.ts                    # web/icon.svg 와 icon-*.png 다시 만들기
 node tools/qr.ts                       # web/qr.svg (수신기 주소 QR, 데스크톱 설정 페이지용) 다시 만들기
 ```
 

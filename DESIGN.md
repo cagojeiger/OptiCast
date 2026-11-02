@@ -17,7 +17,7 @@
 ## Brand
 
 A quiet tool that sits next to a terminal. Neutral gray in light and dark, one signal hue, no
-decoration. The grid-finder motif from the frame's corner marks is the icon.
+decoration. The icon is a lens ring with the grid the camera reads inside it (`tools/icons.ts`).
 
 ## Product goals
 

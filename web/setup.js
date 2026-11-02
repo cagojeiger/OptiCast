@@ -20,9 +20,23 @@
     set('cmd-curl', `curl -fsSL ${base} | tar xz`)
     set('cmd-send', `./diodecam-${target}/diodecam send report.pdf`)
   }
-  for (const b of buttons) b.addEventListener('click', () => choose(b.dataset.target ?? ''))
-  // macOS visitors most likely send from a Mac too.
-  if (/Mac/.test(navigator.platform)) choose('aarch64-apple-darwin')
+  // The sender runs on the server, usually Linux: x86_64 stays the default; the last choice is remembered.
+  const KEY = 'diodecam.target'
+  for (const b of buttons)
+    b.addEventListener('click', () => {
+      choose(b.dataset.target ?? '')
+      try {
+        localStorage.setItem(KEY, b.dataset.target ?? '')
+      } catch {
+        // not remembered
+      }
+    })
+  try {
+    const saved = localStorage.getItem(KEY)
+    if (saved && buttons.some((b) => b.dataset.target === saved)) choose(saved)
+  } catch {
+    // not remembered
+  }
   for (const b of /** @type {HTMLButtonElement[]} */ ([...document.querySelectorAll('button.copy')])) {
     b.addEventListener('click', async () => {
       const text = document.getElementById(b.dataset.copy ?? '')?.textContent ?? ''
@@ -30,7 +44,10 @@
         await navigator.clipboard.writeText(text)
         b.textContent = 'Copied'
       } catch {
-        b.textContent = 'Select and copy'
+        // No clipboard: select the command so ⌘C works.
+        const pre = document.getElementById(b.dataset.copy ?? '')
+        if (pre) getSelection()?.selectAllChildren(pre)
+        b.textContent = 'Selected'
       }
       setTimeout(() => (b.textContent = 'Copy'), 2000)
     })
