@@ -50,7 +50,7 @@ Phone (portrait, one screen)
 Phone (landscape): camera left, the rest in a 250 px column on the right.
 Sheets (from the bottom): Get the sender · Stats and diagnostics / camera picker.
 
-Desktop (pointer: fine, hover: hover) — one screen, no page scroll from 1024×700 up
+Desktop (pointer: fine, hover: hover) — one screen, no page scroll from 1024×700 up; shorter or narrower windows fall back to one scrolling column
   left   1 Run on the server    target picker · file field · one box: curl | tar xz + send · Copy
   right  2 Scan with your phone QR
          3 Point the phone      two sentences
