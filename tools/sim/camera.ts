@@ -73,7 +73,8 @@ export function cameraView(src: GrayImage, opts: CameraOptions): GrayImage {
 export function tear(newer: GrayImage, older: GrayImage, boundary: number): GrayImage {
   if (newer.width !== older.width || newer.height !== older.height) throw new Error('tear: frames differ in size')
   const data = older.data.slice()
-  data.set(newer.data.subarray(0, Math.min(boundary, newer.height) * newer.width))
+  const rows = Math.max(0, Math.min(Math.floor(boundary), newer.height)) // whole rows, like the Rust usize
+  data.set(newer.data.subarray(0, rows * newer.width))
   return { width: newer.width, height: newer.height, data }
 }
 

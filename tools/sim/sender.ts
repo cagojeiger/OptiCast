@@ -71,6 +71,7 @@ export function senderFrames(opts: SenderOptions, bin?: string): { header: Sende
       .trim()
       .split('\n')
       .map((l) => JSON.parse(l))
+    if (header?.format !== 'diodecam-frames') throw new Error(`${out}: not a diodecam frames file`)
     return { header, frames: lines.map((l: { ansi: string }) => l.ansi) }
   } finally {
     rmSync(dir, { recursive: true, force: true })

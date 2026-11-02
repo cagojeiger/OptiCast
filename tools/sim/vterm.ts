@@ -158,7 +158,7 @@ export class VTerm {
         case '▀':
           return py < Math.floor((chh - gap) / 2)
         case '▄':
-          return py >= chh / 2
+          return py >= Math.floor((chh - gap) / 2) // the complement of ▀ (the sender never draws it)
         default:
           return px < cw * 0.6 && py > chh * 0.25 && py < chh * 0.75 // any other glyph: a rough ink blob
       }
