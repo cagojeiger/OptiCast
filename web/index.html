@@ -39,7 +39,7 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z" /><circle cx="12" cy="13" r="3.5" /></svg>
           <p id="status" data-testid="status">Start the camera and<br />frame the whole sender screen</p>
         </div>
-        <div class="ring" id="ring" data-testid="ring" role="img" aria-label="Progress" hidden><span id="ring-label">0%</span></div>
+        <div class="ring" id="ring" data-testid="ring" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><span id="ring-label">0%</span></div>
         <div class="tick" id="tick" role="img" aria-label="Received" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></div>
       </section>
 
@@ -49,8 +49,8 @@
           <span id="file-size" data-testid="file-size" class="muted">—</span>
         </div>
         <div class="bar-track"><div id="bar" class="bar-fill" data-testid="bar"></div></div>
-        <div id="strip" class="strip" data-state="idle" role="status" data-testid="strip">
-          <span id="strip-state">○ Idle</span>
+        <div id="strip" class="strip" data-state="idle" data-testid="strip">
+          <span id="strip-state" role="status">○ Idle</span>
           <span id="symbols" data-testid="symbols">0 / ?</span>
           <span id="strip-extra" data-testid="strip-extra"></span>
           <span class="grow"></span>

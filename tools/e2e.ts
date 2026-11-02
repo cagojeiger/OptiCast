@@ -220,8 +220,8 @@ try {
       const before = await page.getByTestId('symbols').textContent()
       await page.reload()
       await page.getByTestId('start').click()
-      await page.getByTestId('hint').getByText('resumed').waitFor({ timeout: 15_000 })
-      const status = await page.getByTestId('status').textContent()
+      await page.getByTestId('strip-extra').getByText('resumed').waitFor({ timeout: 15_000 })
+      const status = await page.getByTestId('strip').textContent()
       console.log(`reload   before: ${before}; after reload: ${status}`)
       result.resumed = status
     }

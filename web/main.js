@@ -61,6 +61,7 @@ const barEl = $('bar')
 const ringEl = $('ring')
 const ringLabel = $('ring-label')
 const tickEl = $('tick')
+const promptEl = $('prompt')
 const hintEl = $('hint')
 const fileEl = /** @type {HTMLElement} */ (fileNameEl.parentElement)
 const progressSection = /** @type {HTMLElement} */ (document.querySelector('.progress'))
@@ -136,6 +137,8 @@ let captureTimes = []
 /** @type {number[]} */
 let resultTimes = []
 let workerError = ''
+/** Set by fatal(): the decoder is gone until a reload. */
+let fatalError = ''
 /**
  * What the last action failed on (camera, share); stays until the next action.
  * @type {{ text: string, tone: 'warn' | 'bad' } | null}
@@ -267,7 +270,7 @@ worker.onerror = (event) => {
 function fatal() {
   stopCamera()
   startBtn.disabled = true
-  workerError = 'Decoder error. Reload to resume from the saved progress.'
+  fatalError = 'Decoder error. Reload to resume from the saved progress.'
 }
 
 /** @param {Extract<FromWorker, { type: 'result' }>} r */
@@ -397,9 +400,9 @@ function render() {
   const fraction = need ? Math.min(1, have / need) : 0
   const left = eta(have, need, symbolRate(progress))
   stat.eta.textContent = left === null ? '—' : formatSeconds(left)
-  const done = !!offer && !scanning
+  const error = (!!notice && notice.tone === 'bad') || fatalError !== ''
+  const done = !!offer && !scanning && !error
   const receiving = scanning && !!s?.meta && !s.done
-  const error = !!notice && notice.tone === 'bad'
 
   // File row: the transfer on screen, else the kept file, else nothing.
   if (s?.meta) {
@@ -423,7 +426,9 @@ function render() {
   ringEl.hidden = !receiving
   ringEl.style.setProperty('--p', `${fraction * 100}%`)
   ringLabel.textContent = `${Math.floor(fraction * 100)}%`
+  ringEl.setAttribute('aria-valuenow', String(Math.floor(fraction * 100)))
   tickEl.hidden = !done
+  promptEl.hidden = done
 
   // The strip: one place, four colors.
   const resumedText = resumed > 0 ? ` · ${thousands(resumed)} resumed` : ''
@@ -431,7 +436,7 @@ function render() {
     stripEl.dataset.state = 'error'
     stripState.textContent = '✕ Error'
     symbolsEl.textContent = ''
-    stripExtra.textContent = ''
+    stripExtra.textContent = fatalError || notice?.text || ''
     stripRight.textContent = ''
   } else if (done && offer) {
     stripEl.dataset.state = 'done'
@@ -455,14 +460,14 @@ function render() {
 
   // Buttons: always present; enabled when they can act.
   startLabel.textContent = scanning ? 'Stop' : 'Start'
-  startBtn.classList.toggle('primary', !scanning && !offer)
+  startBtn.classList.toggle('primary', !scanning && !offer && !error)
   startBtn.querySelector('svg')?.replaceChildren(pathEl(scanning ? 'M5 5h14v14H5z' : 'M7 4l13 8-13 8z'))
   const canShare = !!offer && (navigator.canShare?.({ files: [offer.file] }) ?? false)
-  shareBtn.disabled = !canShare
-  downloadBtn.disabled = !offer
+  shareBtn.disabled = !canShare || receiving
+  downloadBtn.disabled = !offer || receiving
   shareBtn.classList.toggle('primary', canShare)
   downloadBtn.classList.toggle('primary', !!offer && !canShare)
-  resetBtn.disabled = !offer && !s?.meta && !scanning
+  resetBtn.disabled = !offer && !s?.meta && !scanning && !error
 
   // Hint line: always 20 px; the reason a control is off, or what to change.
   const h = scanning && !s?.done ? hint(frames, video.videoHeight > video.videoWidth) : null
@@ -481,7 +486,9 @@ function render() {
   }
 
   // Status: the prompt over the camera (idle), or the one-line caption while live.
-  if (notice) {
+  if (fatalError) {
+    setStatus(fatalError, 'bad')
+  } else if (notice) {
     setStatus(notice.text, notice.tone)
   } else if (starting) {
     setStatus('Opening the camera…')
@@ -601,6 +608,7 @@ async function keepAwake() {
 }
 
 function stopCamera() {
+  viewer.classList.remove('detected')
   void wakeLock?.release().catch(() => {})
   wakeLock = null
   scanning = false
@@ -866,7 +874,8 @@ for (const [btn, sheet] of sheets) {
   btn.addEventListener('click', () => sheet.showModal())
   sheet.querySelector('.close')?.addEventListener('click', () => sheet.close())
   sheet.addEventListener('click', (e) => {
-    if (e.target === sheet) sheet.close()
+    const r = sheet.getBoundingClientRect()
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) sheet.close()
   })
 }
 $('send-link').addEventListener('click', () => {

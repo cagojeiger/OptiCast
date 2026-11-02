@@ -332,6 +332,16 @@ h1 span {
   flex-grow: 1;
 }
 
+#strip-extra {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#strip-right {
+  flex-shrink: 0;
+}
+
 .hint {
   margin: 0;
   height: 20px;
@@ -461,8 +471,10 @@ a:focus-visible {
 .sheet {
   width: 100%;
   max-width: 640px;
-  margin: auto 0 0;
+  margin: auto auto 0;
   padding: 8px 16px max(16px, env(safe-area-inset-bottom));
+  max-height: 92dvh;
+  overflow-y: auto;
   border: 0;
   border-radius: 16px 16px 0 0;
   background: var(--bg);
@@ -637,7 +649,6 @@ dd {
 
   .actions #share {
     grid-column: span 2;
-    min-height: 48px;
   }
 
   .actions button {
