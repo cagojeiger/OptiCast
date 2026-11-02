@@ -736,7 +736,7 @@ html[data-view='receiver'] #setup {
   font-size: 12px;
 }
 
-/* --- desktop setup page: one screen, two columns, one fold ------------------------------ */
+/* --- desktop setup page: one screen, two columns ---------------------------------------- */
 
 .setup {
   height: 100dvh;
@@ -745,19 +745,10 @@ html[data-view='receiver'] #setup {
   padding: 28px 32px 16px;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
-  grid-template-areas: 'head' 'grid' 'fold' 'foot';
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'head' 'grid' 'foot';
 }
 
-/* Open, the fold takes the flexible row instead and scrolls; the cards keep their size. */
-.setup:has(.fold[open]) {
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
-  gap: 16px;
-  max-width: 1200px;
-  margin: 0 auto;
-  font-size: 14px;
-  line-height: 1.5;
-}
 
 .setup-head {
   grid-area: head;
@@ -769,41 +760,43 @@ html[data-view='receiver'] #setup {
 
 .setup-head h1 {
   font-size: 24px;
-  flex-grow: 0;
+  flex-grow: 1;
 }
 
-.setup-head p {
-  margin: 0;
-  flex: 999 1 320px;
-  color: var(--muted);
+.setup-head .icon {
+  color: var(--text);
+}
+
+.setup-head .icon svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+
+.setup-head .github svg {
+  stroke: none;
+}
+
+.setup-head a.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+}
+
+#theme-half {
+  fill: currentColor;
+  stroke: none;
 }
 
 .setup a {
   color: var(--link);
 }
 
-.theme {
-  display: inline-flex;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.theme button {
-  min-height: 32px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.theme button[aria-pressed='true'] {
-  background: var(--invert-bg);
-  color: var(--invert-text);
-}
 
 .setup-grid {
   grid-area: grid;
@@ -878,6 +871,12 @@ html[data-view='receiver'] #setup {
 .setup p.muted {
   color: var(--muted);
   font-size: 13px;
+}
+
+.setup p.links a {
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .setup code {
@@ -971,50 +970,14 @@ html[data-view='receiver'] #setup {
   background: #fff;
 }
 
-/* The fold stays one line closed; open, it scrolls inside its own box. */
-.fold {
-  grid-area: fold;
-  min-height: 0;
-  max-height: 100%;
-  overflow-y: auto; /* <details> is not a flex container in Chrome: the fold itself scrolls */
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--bg);
-}
 
-.fold summary {
-  position: sticky;
-  top: 0;
-  background: var(--bg);
-  z-index: 1;
-}
 
-.fold summary {
-  cursor: pointer;
-  min-height: 40px;
-  padding: 0 16px;
-  display: flex;
-  align-items: center;
-  font-size: 13px;
-  font-weight: 600;
-}
 
-.fold[open] summary {
-  border-bottom: 1px solid var(--line);
-}
 
-.fold-body {
-  padding: 12px 16px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 10px;
-}
 
-.fold h3 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-}
+
+
+
 
 .setup-foot a {
   color: var(--muted);
@@ -1085,16 +1048,16 @@ html[data-view='receiver'] #setup {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .fold {
-    max-height: none;
-  }
-
   .setup-col > .card {
     overflow: visible;
   }
 
   .card.send {
     container-type: normal;
+  }
+
+  .example {
+    flex: none;
   }
 
   .example img {
@@ -1177,6 +1140,22 @@ main.doc ul {
 main.doc code {
   font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   font-size: 13px;
+}
+
+main.doc .code {
+  margin: 0 0 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+main.doc .code pre {
+  margin: 0;
+  overflow-x: auto;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.7;
 }
 
 main.doc .licenses {

@@ -20,6 +20,7 @@ const FILES = [
   'qr.svg',
   'icon.svg',
   'example-terminal.svg',
+  'help.html',
   'privacy.html',
   'terms.html',
   'licenses.html',
@@ -103,6 +104,10 @@ async function page(request) {
   } catch {
     // offline
   }
-  const copy = await (await caches.open(CACHE)).match(new URL(PAGE, sw.registration.scope))
+  // Offline: this page's own copy if it is one of the cached pages, else the receiver.
+  const cache = await caches.open(CACHE)
+  const path = new URL(request.url).pathname.replace(/^.*\//, '')
+  const own = path && (await cache.match(new URL(`./${path}?v=${VERSION}`, sw.registration.scope)))
+  const copy = own || (await cache.match(new URL(PAGE, sw.registration.scope)))
   return copy ?? network
 }

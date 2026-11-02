@@ -11,7 +11,7 @@ SSH 터미널에 그린 흑백 격자를 폰 카메라로 찍어 파일을 옮�
 
    ```sh
    curl -fsSL https://github.com/cagojeiger/diodecam/releases/latest/download/diodecam-x86_64-unknown-linux-musl.tar.gz | tar xz
-   ./diodecam-x86_64-unknown-linux-musl/diodecam send report.pdf
+   ./diodecam-x86_64-unknown-linux-musl/diodecam send <FILE>
    ```
 
    다른 대상: `aarch64-unknown-linux-musl`, `aarch64-apple-darwin`, `x86_64-apple-darwin`. 폴더는 `tar czf`로 묶는다.
