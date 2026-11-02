@@ -4,21 +4,27 @@
 
 {
   const buttons = /** @type {HTMLButtonElement[]} */ ([...document.querySelectorAll('.targets button')])
+  const fileInput = /** @type {HTMLInputElement} */ (document.getElementById('file-input'))
+  let current = 'x86_64-unknown-linux-musl'
+  /** The file as typed, shell-quoted when it needs it; `<FILE>` while empty. */
+  const fileArg = () => {
+    const f = fileInput.value.trim()
+    if (!f) return '<FILE>'
+    return /^[\w./+=@:,-]+$/.test(f) ? f : `'${f.replace(/'/g, "'\\''")}'`
+  }
   /** @param {string} target */
   const choose = (target) => {
+    current = target
     const base = `https://github.com/cagojeiger/diodecam/releases/latest/download/diodecam-${target}.tar.gz`
     for (const b of buttons) b.setAttribute('aria-pressed', String(b.dataset.target === target))
-    const tar = /** @type {HTMLAnchorElement} */ (document.getElementById('dl-tar'))
-    const sha = /** @type {HTMLAnchorElement} */ (document.getElementById('dl-sha'))
-    tar.href = base
-    sha.href = `${base}.sha256`
     const set = (/** @type {string} */ id, /** @type {string} */ text) => {
       const el = document.getElementById(id)
       if (el) el.textContent = text
     }
+    set('cmd-run', `curl -fsSL ${base} | tar xz\n./diodecam-${target}/diodecam send ${fileArg()}`)
+    set('cmd-fetch', `curl -fsSLO ${base}\ncurl -fsSLO ${base}.sha256`)
     set('cmd-verify', `sha256sum -c diodecam-${target}.tar.gz.sha256\ntar xzf diodecam-${target}.tar.gz`)
-    set('cmd-curl', `curl -fsSL ${base} | tar xz`)
-    set('cmd-send', `./diodecam-${target}/diodecam send report.pdf`)
+    set('cmd-xattr', `xattr -d com.apple.quarantine ./diodecam-${target}/diodecam`)
   }
   // The sender runs on the server, usually Linux: x86_64 stays the default; the last choice is remembered.
   const KEY = 'diodecam.target'
@@ -31,6 +37,7 @@
         // not remembered
       }
     })
+  fileInput.addEventListener('input', () => choose(current))
   try {
     const saved = localStorage.getItem(KEY)
     if (saved && buttons.some((b) => b.dataset.target === saved)) choose(saved)

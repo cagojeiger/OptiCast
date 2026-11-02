@@ -26,7 +26,7 @@ decoration. The icon is a lens ring with the grid the camera reads inside it (`t
 | Receive a file with one hand while watching a terminal | Everything fits in iPhone SE Safari's 375×553 without scrolling; the thumb never hunts for a button |
 | The phone is the receiver, the desktop is the setup | A desktop visitor sees install steps, downloads and a QR; a phone visitor sees the camera |
 | Nothing moves | Controls keep position and size across every state; only fill, text and enablement change |
-| The air-gapped path is the default | Download + sha256 + offline verify comes before the `curl` one-liner |
+| Three steps, one fold | Run (curl + send in one Copy), scan the QR, point the phone. Everything else lives under one "More" fold |
 
 Non-goals: a desktop camera receiver; a general file manager; any upload.
 
@@ -51,9 +51,10 @@ Phone (landscape): camera left, the rest in a 250 px column on the right.
 Sheets (from the bottom): Get the sender · Stats and diagnostics / camera picker.
 
 Desktop (pointer: fine, hover: hover)
-  1 Install the sender   target picker · air-gapped (default) · internet
-  2 Send                 the command
-  3 Receive on a phone   QR · add-to-home-screen · practice screen
+  1 Run on the server    target picker · one box: curl | tar xz + diodecam send · Copy
+  2 Scan with your phone QR
+  3 Point the phone      two sentences
+  More (one fold)        air-gapped import · macOS quarantine · keys, folders · offline, storage
   footer                 version · "uploads nothing" · policy note
 ```
 

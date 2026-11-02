@@ -878,6 +878,20 @@ for (const [btn, sheet] of sheets) {
     if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) sheet.close()
   })
 }
+for (const b of /** @type {HTMLButtonElement[]} */ ([...document.querySelectorAll('.sheet button.copy')])) {
+  b.addEventListener('click', async () => {
+    const text = document.getElementById(b.dataset.copy ?? '')?.textContent ?? ''
+    try {
+      await navigator.clipboard.writeText(text)
+      b.textContent = 'Copied'
+    } catch {
+      const pre = document.getElementById(b.dataset.copy ?? '')
+      if (pre) getSelection()?.selectAllChildren(pre)
+      b.textContent = 'Selected'
+    }
+    setTimeout(() => (b.textContent = 'Copy'), 2000)
+  })
+}
 $('send-link').addEventListener('click', () => {
   const url = location.origin + location.pathname
   if (navigator.share) navigator.share({ title: 'DiodeCam', text: 'DiodeCam setup and sender downloads', url }).catch(() => {})
