@@ -19,6 +19,11 @@
       // home-screen app, get the receiver. `?receiver=1` forces the receiver (the
       // e2e runs in desktop Chrome). Decided before paint; the script loads at the end of body.
       {
+        // A chosen theme (light/dark) overrides the system setting; 'auto' or nothing follows it.
+        try {
+          const theme = localStorage.getItem('diodecam.theme')
+          if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme
+        } catch {}
         const forced = new URLSearchParams(location.search).get('receiver') === '1'
         const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true
         const desktop = matchMedia('(hover: hover) and (pointer: fine)').matches
@@ -125,6 +130,11 @@
       <header class="setup-head">
         <h1>DiodeCam</h1>
         <p>A file from a terminal to your phone, through the camera. No network, USB or app install.</p>
+        <div class="theme" role="group" aria-label="Theme">
+          <button type="button" data-theme="light" aria-pressed="false">Light</button>
+          <button type="button" data-theme="dark" aria-pressed="false">Dark</button>
+          <button type="button" data-theme="auto" aria-pressed="true">Auto</button>
+        </div>
         <a href="https://github.com/cagojeiger/diodecam">GitHub</a>
       </header>
 

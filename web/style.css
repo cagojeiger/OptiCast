@@ -25,8 +25,9 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Dark tokens: the system setting unless the person chose; a choice is data-theme. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --bg: #171717;
     --panel: #1f1f1f;
     --surface: #212121;
@@ -44,6 +45,25 @@
     --bad: #f87171;
   }
 }
+
+:root[data-theme='dark'] {
+    --bg: #171717;
+    --panel: #1f1f1f;
+    --surface: #212121;
+    --line: #2f2f2f;
+    --text: #ececec;
+    --text-2: #c4c4c4;
+    --muted: #a3a3a3;
+    --disabled: #666666;
+    --link: #60a5fa;
+    --invert-bg: #ececec;
+    --invert-text: #171717;
+    --secondary: #2f2f2f;
+    --done: #34d399;
+    --warn: #fbbf24;
+    --bad: #f87171;
+}
+
 
 * {
   box-sizing: border-box;
@@ -494,9 +514,13 @@ a:focus-visible {
 }
 
 @media (prefers-color-scheme: dark) {
-  .sheet::backdrop {
+  :root:not([data-theme='light']) .sheet::backdrop {
     background: rgba(0, 0, 0, 0.6);
   }
+}
+
+:root[data-theme='dark'] .sheet::backdrop {
+  background: rgba(0, 0, 0, 0.6);
 }
 
 .handle {
@@ -716,7 +740,7 @@ html[data-view='receiver'] #setup {
   padding: 28px 32px 16px;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
   grid-template-areas: 'head' 'grid' 'fold' 'foot';
   gap: 16px;
   max-width: 1200px;
@@ -748,12 +772,46 @@ html[data-view='receiver'] #setup {
   color: var(--link);
 }
 
+.theme {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.theme button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.theme button[aria-pressed='true'] {
+  background: var(--invert-bg);
+  color: var(--invert-text);
+}
+
 .setup-grid {
   grid-area: grid;
+  min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
+}
+
+/* The cards fill the row; their content keeps its own height, so nothing stretches awkwardly. */
+.setup-grid > .card {
+  min-height: 0;
+  overflow: auto;
+}
+
+.card.phone {
+  justify-content: center;
 }
 
 .setup .card {
@@ -897,9 +955,7 @@ html[data-view='receiver'] #setup {
 /* The fold stays one line closed; open, it scrolls inside its own box. */
 .fold {
   grid-area: fold;
-  align-self: start;
-  max-height: 100%;
-  min-height: 0;
+  max-height: 40dvh;
   overflow-y: auto; /* <details> is not a flex container in Chrome: the fold itself scrolls */
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -962,6 +1018,10 @@ html[data-view='receiver'] #setup {
 
   .fold {
     max-height: none;
+  }
+
+  .setup-grid > .card {
+    overflow: visible;
   }
 }
 

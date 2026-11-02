@@ -54,6 +54,27 @@
   } catch {
     // not remembered
   }
+  // Theme: a choice is stored and applied before paint by the head script; 'auto' clears it.
+  const THEME_KEY = 'diodecam.theme'
+  const themeButtons = /** @type {HTMLButtonElement[]} */ ([...document.querySelectorAll('.theme button')])
+  const showTheme = () => {
+    const chosen = document.documentElement.dataset.theme ?? 'auto'
+    for (const b of themeButtons) b.setAttribute('aria-pressed', String(b.dataset.theme === chosen))
+  }
+  for (const b of themeButtons)
+    b.addEventListener('click', () => {
+      const t = b.dataset.theme ?? 'auto'
+      if (t === 'auto') delete document.documentElement.dataset.theme
+      else document.documentElement.dataset.theme = t
+      try {
+        if (t === 'auto') localStorage.removeItem(THEME_KEY)
+        else localStorage.setItem(THEME_KEY, t)
+      } catch {
+        // not remembered
+      }
+      showTheme()
+    })
+  showTheme()
   for (const b of /** @type {HTMLButtonElement[]} */ ([...document.querySelectorAll('button.copy')])) {
     b.addEventListener('click', async () => {
       const text = document.getElementById(b.dataset.copy ?? '')?.textContent ?? ''

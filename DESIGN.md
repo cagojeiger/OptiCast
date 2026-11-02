@@ -50,7 +50,8 @@ Phone (portrait, one screen)
 Phone (landscape): camera left, the rest in a 250 px column on the right.
 Sheets (from the bottom): Get the sender · Stats and diagnostics / camera picker.
 
-Desktop (pointer: fine, hover: hover) — one screen, no page scroll from 1024×700 up; shorter or narrower windows fall back to one scrolling column
+Desktop (pointer: fine, hover: hover) — one screen: the two cards fill the height to the fold, no page scroll from 1024×700 up; shorter or narrower windows fall back to one scrolling column
+  head   title · one line · Light / Dark / Auto · GitHub
   left   1 Run on the server    target picker · file field · one box: curl | tar xz + send · Copy
   right  2 Scan with your phone QR
          3 Point the phone      two sentences
@@ -72,8 +73,9 @@ Desktop (pointer: fine, hover: hover) — one screen, no page scroll from 1024×
 
 ## Visual language
 
-Neutral gray ramp (Tailwind `neutral`, MIT) in two modes following `prefers-color-scheme`; light is
-the desktop default. System sans for UI, `ui-monospace` for commands. Sizes 13 / 15 / 16 / 17 on
+Neutral gray ramp (Tailwind `neutral`, MIT) in two modes. The system setting applies unless the
+person picks Light or Dark on the desktop page (stored, applied before paint, honoured by the
+receiver too); Auto clears the choice. System sans for UI, `ui-monospace` for commands. Sizes 13 / 15 / 16 / 17 on
 the phone, 14 / 15 / 18 / 26 on the desktop. Spacing on an 8 px grid (4 for hairlines). Radii: 4
 progress bar · 8 status strip, icon buttons · 10 buttons, inputs, code · 12 camera, cards · 16
 sheet top · full circle only for the ring, step badges and pills. No shadows: a sheet dims what is
