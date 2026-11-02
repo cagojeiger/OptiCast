@@ -50,11 +50,12 @@ Phone (portrait, one screen)
 Phone (landscape): camera left, the rest in a 250 px column on the right.
 Sheets (from the bottom): Get the sender · Stats and diagnostics / camera picker.
 
-Desktop (pointer: fine, hover: hover)
-  1 Run on the server    target picker · one box: curl | tar xz + diodecam send · Copy
-  2 Scan with your phone QR
-  3 Point the phone      two sentences
-  More (one fold)        air-gapped import · macOS quarantine · keys, folders · offline, storage
+Desktop (pointer: fine, hover: hover) — one screen, no page scroll from 1024×700 up; shorter or narrower windows fall back to one scrolling column
+  left   1 Run on the server    target picker · file field · one box: curl | tar xz + send · Copy
+  right  2 Scan with your phone QR
+         3 Point the phone      two sentences
+  below  More (one fold)        air-gapped import · macOS quarantine · keys, folders · offline; scrolls inside
+  foot   version · uploads nothing · policy note
   footer                 version · "uploads nothing" · policy note
 ```
 
