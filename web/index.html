@@ -82,15 +82,11 @@
     <dialog id="sender-sheet" class="sheet" aria-label="Get the sender">
       <div class="handle" aria-hidden="true"></div>
       <div class="sheet-head"><h2>Get the sender</h2><button class="icon close" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></button></div>
-      <p class="muted">The sender runs on the machine that has the file. Open this address on a computer for the install steps.</p>
+      <p class="muted">The sender runs on the machine that has the file. On that machine:</p>
+      <div class="code"><pre id="cmd-curl-sheet">curl -fsSL https://github.com/cagojeiger/diodecam/releases/latest/download/diodecam-x86_64-unknown-linux-musl.tar.gz | tar xz
+./diodecam-x86_64-unknown-linux-musl/diodecam send &lt;FILE&gt;</pre><button type="button" class="copy" data-copy="cmd-curl-sheet">Copy</button></div>
+      <p class="muted">Other targets: <code>aarch64-unknown-linux-musl</code>, <code>aarch64-apple-darwin</code>, <code>x86_64-apple-darwin</code>. The full guide is on this address on a computer.</p>
       <button id="send-link" class="primary wide" data-testid="send-link"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" /></svg>Send link to a computer</button>
-      <p class="label">Direct download (tar.gz)</p>
-      <ul class="rows" id="downloads">
-        <li><a href="https://github.com/cagojeiger/diodecam/releases/latest/download/diodecam-x86_64-unknown-linux-musl.tar.gz">Linux x86_64</a></li>
-        <li><a href="https://github.com/cagojeiger/diodecam/releases/latest/download/diodecam-aarch64-unknown-linux-musl.tar.gz">Linux arm64</a></li>
-        <li><a href="https://github.com/cagojeiger/diodecam/releases/latest/download/diodecam-aarch64-apple-darwin.tar.gz">macOS (Apple silicon)</a></li>
-        <li><a href="https://github.com/cagojeiger/diodecam/releases/latest/download/diodecam-x86_64-apple-darwin.tar.gz">macOS (Intel)</a></li>
-      </ul>
     </dialog>
 
     <dialog id="stats-sheet" class="sheet" aria-label="Stats and diagnostics">
@@ -125,54 +121,61 @@
     </dialog>
 
     <!-- Desktop: install the sender, send, connect the phone. No camera here (DESIGN.md). -->
-    <section id="setup" class="setup" aria-label="Setup">
+    <!-- Desktop: download, then how to use it (DESIGN.md). No camera here. -->
+    <!-- Desktop view: three steps and one fold (DESIGN.md). No camera here. -->
+    <section id="setup" class="setup" aria-label="How to use">
       <header class="setup-head">
         <h1>DiodeCam</h1>
-        <p>One-way file transfer: point a phone camera at a terminal. No network, USB or app install.</p>
+        <p>A file from a terminal to your phone, through the camera. No network, USB or app install.</p>
         <a href="https://github.com/cagojeiger/diodecam">GitHub</a>
       </header>
-      <div class="setup-grid">
-        <div class="setup-col">
-          <section class="card">
-            <h2><span class="step">1</span>Install the sender</h2>
-            <div class="targets" role="group" aria-label="Server type">
-              <button type="button" data-target="x86_64-unknown-linux-musl" aria-pressed="true">Linux x86_64</button>
-              <button type="button" data-target="aarch64-unknown-linux-musl" aria-pressed="false">Linux arm64</button>
-              <button type="button" data-target="aarch64-apple-darwin" aria-pressed="false">macOS (Apple silicon)</button>
-              <button type="button" data-target="x86_64-apple-darwin" aria-pressed="false">macOS (Intel)</button>
-            </div>
-            <div class="subcard">
-              <h3>Air-gapped server <span class="pill">default</span></h3>
-              <div class="row">
-                <a class="button primary" id="dl-tar" href="https://github.com/cagojeiger/diodecam/releases/latest/download/diodecam-x86_64-unknown-linux-musl.tar.gz"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 11l4 4 4-4M5 21h14" /></svg>Download tar.gz</a>
-                <a class="button" id="dl-sha" href="https://github.com/cagojeiger/diodecam/releases/latest/download/diodecam-x86_64-unknown-linux-musl.tar.gz.sha256">sha256</a>
-              </div>
-              <p>Move both files to the server through your organisation's approved import path, then verify and unpack there.</p>
-              <div class="code"><pre id="cmd-verify">sha256sum -c diodecam-x86_64-unknown-linux-musl.tar.gz.sha256
-tar xzf diodecam-x86_64-unknown-linux-musl.tar.gz</pre><button type="button" class="copy" data-copy="cmd-verify">Copy</button></div>
-            </div>
-            <div class="subcard">
-              <h3>Server with internet access</h3>
-              <div class="code"><pre id="cmd-curl">curl -fsSL https://github.com/cagojeiger/diodecam/releases/latest/download/diodecam-x86_64-unknown-linux-musl.tar.gz | tar xz</pre><button type="button" class="copy" data-copy="cmd-curl">Copy</button></div>
-            </div>
-          </section>
-          <section class="card">
-            <h2><span class="step">2</span>Send</h2>
-            <div class="code"><pre id="cmd-send">./diodecam-x86_64-unknown-linux-musl/diodecam send report.pdf</pre><button type="button" class="copy" data-copy="cmd-send">Copy</button></div>
-            <p class="muted">A larger terminal is faster: at 200×55, 1 MiB takes about 26 s. Pack folders with <code>tar czf</code>. Keys: <code>+</code>/<code>-</code> fps, space pause, <code>q</code> quit.</p>
-          </section>
+
+      <section class="card wide">
+        <h2><span class="step">1</span>Run on the server</h2>
+        <div class="targets" role="group" aria-label="Where the sender runs">
+          <button type="button" data-target="x86_64-unknown-linux-musl" aria-pressed="true">Linux x86_64</button>
+          <button type="button" data-target="aarch64-unknown-linux-musl" aria-pressed="false">Linux arm64</button>
+          <button type="button" data-target="aarch64-apple-darwin" aria-pressed="false">macOS (Apple silicon)</button>
+          <button type="button" data-target="x86_64-apple-darwin" aria-pressed="false">macOS (Intel)</button>
         </div>
-        <aside class="card">
-          <h2><span class="step">3</span>Receive on a phone</h2>
+        <label class="file-field"><span>File to send</span><input id="file-input" type="text" placeholder="e.g. report.pdf" autocomplete="off" spellcheck="false" /></label>
+        <div class="code"><pre id="cmd-run">curl -fsSL https://github.com/cagojeiger/diodecam/releases/latest/download/diodecam-x86_64-unknown-linux-musl.tar.gz | tar xz
+./diodecam-x86_64-unknown-linux-musl/diodecam send &lt;FILE&gt;</pre><button type="button" class="copy" data-copy="cmd-run">Copy</button></div>
+        <p class="muted">Type the file's path above and the command fills in. Folders: <code>tar czf docs.tgz docs/</code> first.</p>
+      </section>
+
+      <div class="setup-grid">
+        <section class="card">
+          <h2><span class="step">2</span>Scan with your phone</h2>
           <img class="qr" src="./qr.svg?v=__V__" width="232" height="232" alt="QR code for the receiver address" />
-          <p>Scan with the phone camera to open the receiver. In Safari, Share → Add to Home Screen makes it work offline.</p>
-          <p class="muted">The receiver uploads nothing and never opens the received file; it is saved only when you tap Share or Download.</p>
-          <a class="muted" href="./?receiver=1">Open the receiver here anyway ›</a>
-        </aside>
+        </section>
+        <section class="card">
+          <h2><span class="step">3</span>Point the phone at the terminal</h2>
+          <p>Tap <b>Start</b> and frame the whole screen; sideways reads better.</p>
+          <p>When it says <b>✓ Received</b>, tap <b>Share · Save</b>, then press <code>q</code> on the server.</p>
+        </section>
       </div>
+
+      <details class="fold wide">
+        <summary>More: air-gapped import · macOS quarantine · keys · folders · offline</summary>
+        <h3>Air-gapped server</h3>
+        <p>Fetch the archive and its checksum where there is internet, move both through your organisation's approved import path, then verify and unpack on the server.</p>
+        <div class="code"><pre id="cmd-fetch">curl -fsSLO https://github.com/cagojeiger/diodecam/releases/latest/download/diodecam-x86_64-unknown-linux-musl.tar.gz
+curl -fsSLO https://github.com/cagojeiger/diodecam/releases/latest/download/diodecam-x86_64-unknown-linux-musl.tar.gz.sha256</pre><button type="button" class="copy" data-copy="cmd-fetch">Copy</button></div>
+        <div class="code"><pre id="cmd-verify">sha256sum -c diodecam-x86_64-unknown-linux-musl.tar.gz.sha256
+tar xzf diodecam-x86_64-unknown-linux-musl.tar.gz</pre><button type="button" class="copy" data-copy="cmd-verify">Copy</button></div>
+        <h3>macOS: downloaded with a browser instead?</h3>
+        <p>Browser downloads carry a quarantine mark and macOS refuses an unsigned binary; <code>curl</code> adds no mark. Remove it once:</p>
+        <div class="code"><pre id="cmd-xattr">xattr -d com.apple.quarantine ./diodecam-x86_64-apple-darwin/diodecam</pre><button type="button" class="copy" data-copy="cmd-xattr">Copy</button></div>
+        <h3>While sending</h3>
+        <p>Keys: <code>+</code> / <code>-</code> fps · <code>space</code> pause · <code>q</code> quit. A larger window is faster (200×55: 1 MiB in about 26 s); resizing mid-transfer is fine. Folders: <code>tar czf docs.tgz docs/</code> first. Over 64 MiB: <code>--max-bytes</code>. <code>diodecam -V</code> prints the version.</p>
+        <h3>On the phone</h3>
+        <p>Safari: Share → Add to Home Screen, and the receiver works offline. It uploads nothing and never opens the file; it is saved only when you tap Share or Download. A closed tab keeps the progress for 7 days and the received file until it is shared or replaced, a day at most. <a href="./?receiver=1">Open the receiver on this computer ›</a></p>
+      </details>
+
       <footer class="setup-foot">
         <span>v0.3.0</span>
-        <span>Exporting data from an air-gapped network needs your organisation's approval.</span>
+        <span>The receiver uploads nothing. Exporting data from an air-gapped network needs your organisation's approval.</span>
       </footer>
     </section>
 
