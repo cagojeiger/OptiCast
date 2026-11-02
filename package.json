@@ -1,6 +1,5 @@
 {
   "name": "diodecam",
-  "version": "0.3.0",
   "private": true,
   "description": "One-way offline file transfer: a screen cyclically broadcasts optical frames, a phone browser camera reassembles the file.",
   "license": "Apache-2.0",

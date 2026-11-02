@@ -15,9 +15,10 @@ on:
 permissions:
   contents: read
 
-# One run per branch at a time, in push order, so pushes deploy in the order they were made
-# (re-running an old run deploys that old commit again). A new push to a pull request
-# cancels its running checks.
+# One run per branch at a time: a push to main waits for the running deploy, but GitHub keeps
+# only the newest waiting run, so a waiting run is cancelled when a newer push arrives and only
+# the newest commit deploys (re-running an old run deploys that old commit again). A new push
+# to a pull request cancels its running checks.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}

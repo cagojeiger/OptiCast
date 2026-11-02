@@ -15,6 +15,12 @@ tools/                   wasm 빌드, 로컬 서버, e2e 와 시뮬레이터, �
 test/                    receiver.test.ts (node:test)
 ```
 
+시뮬레이터는 둘이다. `tools/sim`(TS)은 실제 송신 ANSI 바이트를 VTerm으로 재생해 배포되는 wasm과 `web/wasm.js`에 넣는다(수신기 테스트, e2e, `tools/floor.ts`, 설정 페이지 그림).
+`crates/diodecam-sim`(Rust)은 `ModuleGrid`를 3D 자세(yaw·pitch·roll), 렌즈 왜곡, 밝은·어두운 테마로 그려 vision 테스트 안에서 바로 쓴다.
+새 vision 시나리오는 Rust 쪽에 넣고, TS 쪽은 wasm과 JS를 거쳐야 하는 것만 늘린다. `docs/web.md` 3·7절의 바닥 숫자는 TS 시뮬레이터 값이다.
+
+언어: 본문 한국어; 화면 문구·DESIGN.md·코드와 주석은 영어; 문서는 화면 문구를 영어 그대로 인용한다.
+
 ## 빌드와 테스트
 
 ```sh
@@ -50,7 +56,8 @@ pnpm e2e --headed --hold 20            # 보이는 Chrome 으로 시연
 
 - `.github/workflows/ci.yml`: PR과 `main`에서 rustfmt, clippy, cargo test, typecheck, WASM 빌드, JS 테스트. `main`이면 통과한
   WASM과 `web/`을 복사하고 `__V__`를 커밋 해시로, `__VERSION__`을 `Cargo.toml`의 버전으로 바꿔 GitHub Pages에 배포한다. 테스트가 깨진 커밋은 배포되지 않고,
-  같은 브랜치의 실행은 push 순서대로 하나씩 돈다(옛 실행을 다시 돌리면 그 커밋이 다시 배포된다).
+  같은 브랜치에서는 실행이 한 번에 하나만 돈다. 새 push는 도는 실행을 기다리지만 기다리는 실행은 하나만 남으므로,
+  그 사이에 더 새 push가 오면 기다리던 실행은 취소되고 가장 새 커밋만 배포된다(옛 실행을 다시 돌리면 그 커밋이 다시 배포된다).
   커밋 해시가 오프라인 캐시 이름이 되므로 새 배포는 다음 온라인 접속에서 옛 캐시를 대체한다.
 - `v*` 태그 → `.github/workflows/release.yml`: `diodecam-<target>.tar.gz`(+ sha256) 4종을 릴리스에 올린다.
   파일 이름에 버전이 없으므로 `releases/latest/download/…` 주소가 고정이다.

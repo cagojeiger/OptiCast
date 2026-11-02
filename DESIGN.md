@@ -2,8 +2,8 @@
 
 ## Source of truth
 
-- Status: Active · 2026-11-02. The tokens are shipped; the layout, components, desktop page and
-  English copy below are the target that the next changes implement.
+- Status: Active · 2026-11-02. The tokens, layout, components, desktop page and English copy
+  below are what `web/` ships.
 - Scope: the receiver page (`web/`) on phones and the setup page on desktops. The sender CLI's
   terminal output is specified in `docs/cli.md`.
 - Tokens: `web/style.css` `:root` is the canonical value of every color and spacing token. This
