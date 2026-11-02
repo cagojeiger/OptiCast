@@ -1,66 +1,69 @@
 # DiodeCam
 
-SSH 터미널에 그린 흑백 격자를 폰 카메라로 찍어 파일을 옮기는 단방향 오프라인 파일 전송.
-네트워크, USB, 앱 설치가 필요 없다. 실기기(아이폰 Safari)로 16.9 MB를 받아 원본과 바이트 단위로 같은 것을 확인했다.
+Move a file from a terminal to a phone through the camera. One way, offline: no network, no USB, no app to install.
 
-## 사용법
+<p align="center">
+  <img src="web/example-terminal.svg" alt="The terminal while sending: a grid of half blocks and two status lines" height="300">
+  <img src="docs/images/receiver-receiving.jpg" alt="The phone receiver while receiving" height="300">
+  <img src="docs/images/receiver-done.jpg" alt="The phone receiver when the file is verified" height="300">
+</p>
 
-1. PC에서 **https://cagojeiger.github.io/diodecam/** 를 열면 설치 안내와 QR이 나온다. 폰으로 QR을 찍어 수신기를 열고 [Start]. 공유 → 홈 화면에 추가하면 앱처럼 열리고
-   오프라인에서도 동작한다.
-2. 서버에서 보낸다(리눅스용은 정적 바이너리):
+## Use
 
+Open **https://cagojeiger.github.io/diodecam/** on a computer. It shows the download command for your server and a QR code for the phone.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/setup-dark.png">
+  <img src="docs/images/setup-light.png" alt="The setup page: download, send, open the receiver, receive">
+</picture>
+
+1. **Download** the sender on the server:
    ```sh
    curl -fsSL https://github.com/cagojeiger/diodecam/releases/latest/download/diodecam-x86_64-unknown-linux-musl.tar.gz | tar xz
-   ./diodecam-x86_64-unknown-linux-musl/diodecam send <FILE>
    ```
+   Other builds: `aarch64-unknown-linux-musl`, `aarch64-apple-darwin`, `x86_64-apple-darwin`.
+2. **Send**: `./diodecam-x86_64-unknown-linux-musl/diodecam send <FILE>`. The terminal keeps broadcasting until you press `q`.
+3. **Receive**: scan the QR with the phone, tap **Start** and frame the whole terminal. Holding the phone sideways reads better.
+4. When it says **✓ Received**, tap **Share · Save**, then press `q` on the server.
 
-   다른 대상: `aarch64-unknown-linux-musl`, `aarch64-apple-darwin`, `x86_64-apple-darwin`. 폴더는 `tar czf`로 묶는다.
-3. 터미널 화면 전체를 비춘다(폰을 가로로 들면 격자가 크게 찍힌다). 테두리가 초록이면 잘 읽히는 중이고, 놓친 화면은
-   신경 쓰지 않아도 된다. 잘 안 읽히면 안내 줄의 조언을 따르고, ⓘ 시트의 실패 단계와 [Copy diagnostics]로 원인을 본다.
-4. 띠가 "✓ Received"로 바뀌면 [Share · Save]나 [Download]로 저장한 **다음에** 터미널에서 `q`. 저장 전에 탭이 닫혀도
-   새로고침하면 받은 파일이 다시 보인다.
+Keys while sending: `+`/`-` frame rate, space pause, `q` quit. `diodecam --help` lists the options. Pack a folder with `tar czf` first.
 
-키: `+`/`-` fps, space 일시정지, `q` 종료. 옵션: `--fps`(기본 24), `--max-bytes`(기본 64MiB), `--profile auto|ssh|vt100`,
-`--no-compress`. 수신기 주소 옵션: `?max=256`(MiB, 최대 512), `?scan=1920`(디코더 이미지 폭), `?cap=3840`(카메라 요청 폭; `?scan=3840`과 같이 쓰면 모듈당 픽셀 2배, 처리 4배), `?receiver=1`(데스크톱에서도 수신기), `?debug=1`.
+## Speed
 
-## 속도
+24 fps, incompressible data. The grid fills the terminal, so a bigger terminal is faster.
 
-24fps, 손실 없음, 압축이 안 되는 파일. 터미널 크기는 자동으로 계산하고, 전송 중에 창 크기를 바꿔도 이어진다.
+| Terminal | Per second | 1 MiB |
+|---|---|---|
+| 80×24 | 4.1 KB/s | ~4 min |
+| 120×40 | 15 KB/s | ~71 s |
+| 200×55 | 41.5 KB/s | ~26 s |
 
-| 터미널 | 프레임당 | 초당 | 1 MiB |
-|---|---|---|---|
-| 80×24 | 173 B | 4.1 KB/s | 약 4분 13초 |
-| 120×40 | 624 B | 15 KB/s | 약 1분 11초 |
-| **200×55** | 1.73 KB | **41.5 KB/s** | **약 26초** |
-| 240×67 | 2.59 KB | 62 KB/s | 약 17초 |
-
-## 동작 원리
+## How it works
 
 ```
-송신: 파일 → RaptorQ 조각 96 B → 타일 128 B (RS 패리티 + CRC-32C 포함) → ▀ 격자 → 터미널
-수신: 카메라 → 격자 검출 → 타일 RS·CRC → 아무 조각이나 K + 2개 → 복원 → SHA-256 → 저장
+send:    file → RaptorQ symbols → 128-byte tiles (Reed–Solomon + CRC-32C) → grid of ▀ cells → terminal
+receive: camera → find the grid → check each tile → about K + 2 symbols → rebuild → SHA-256 → save
 ```
 
-원본 조각을 한 바퀴 보낸 뒤 섞은 복구 조각을 끝없이 보내므로, 어떤 조각을 놓쳤는지와 상관없이 개수만 채우면 된다.
+The sender repeats fresh repair symbols forever, so a missed frame only costs time: the phone needs about K + 2 symbols (K is the file's symbol count), not particular ones. A damaged tile fails its checks and is dropped, never misread.
 
-## 문서
+## Safety
 
-| 문서 | 내용 |
+- Moving data out of a restricted network needs your organisation's approval. A camera is an export channel like any other.
+- The screen is not encrypted: anyone who can see or film it can receive the file. SHA-256 proves the file arrived intact, not who sent it.
+- The receiver uploads nothing and never opens the file; it saves only when you tap Share or Download.
+- The page is served from `*.github.io`, whose browser storage is shared with other Pages sites of the same account. For sensitive use, host `web/` on your own HTTPS domain.
+
+## Docs
+
+| | |
 |---|---|
-| [`docs/cli.md`](docs/cli.md) | 송신기: 명령, 화면, 상태 줄, 키, 코드 구조 |
-| [`docs/web.md`](docs/web.md) | 수신기: 화면, 안내, 저장·이어 받기, 홈 화면 앱, 진단, 영상 처리 |
-| [`docs/protocol.md`](docs/protocol.md) | 송신기와 수신기가 함께 지키는 화면 형식 |
-| [`docs/development.md`](docs/development.md) | 빌드, 테스트, e2e, 배포, 릴리스 |
-| [`DESIGN.md`](DESIGN.md) | 화면 원칙, 토큰 역할, 상태별 동작 (영어) |
-| [`docs/adr/`](docs/adr/README.md) | 왜 이렇게 만들었나 |
+| [docs/protocol.md](docs/protocol.md) | The screen format both sides follow |
+| [docs/cli.md](docs/cli.md) | The sender |
+| [docs/web.md](docs/web.md) | The receiver |
+| [docs/development.md](docs/development.md) | Build, test, release |
+| [DESIGN.md](DESIGN.md) · [docs/adr/](docs/adr/README.md) | UI rules · why it is built this way |
 
-## 안전 경계
+## License
 
-격리망 데이터 반출은 조직의 명시적 승인과 보안 정책을 따라야 한다. 카메라도 반출 경로다.
-송신 CLI는 크기 상한만 검사한다. 수신 웹은 아무것도 업로드하지 않고, 복원한 파일을 열지 않으며 사용자 동작으로만 저장한다.
-복원한 파일은 공유하거나 다음 파일을 받거나 [Reset]을 누를 때까지(최대 24시간) 그 브라우저 안에만 보관한다.
-`*.github.io` 주소는 같은 계정의 다른 Pages 사이트와 브라우저 저장소를 공유하므로, 민감한 환경이면 전용 도메인에 배포한다.
-
-## 라이선스
-
-Apache-2.0
+Apache-2.0. Third-party licenses: [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
