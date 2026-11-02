@@ -23,8 +23,9 @@
 /** @typedef {'faster' | 'slower' | 'aim' | 'focus' | 'straight' | 'closer' | 'rotate'} Hint */
 
 /**
- * Below this many pixels per module tiles start to fail once the image is a
- * little soft (simulated: 100 % from 4.3 px sharp and 4.7 px with a 3 px blur).
+ * Below this many pixels per module tiles start to fail once the image is soft
+ * (tools/floor.ts: 100 % from 2.9 px sharp, 3.4 px with 2 px of blur, 4.9 px with
+ * 3 px). Real phones hunt for focus, so the advice keeps a margin.
  */
 export const MIN_MODULE_PX = 4.5
 

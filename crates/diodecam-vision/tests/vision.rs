@@ -112,6 +112,33 @@ fn harsh_conditions_degrade_gracefully() {
     }
 }
 
+/// A box blur wider than a module merges the 1-module timing modules (their
+/// edges cannot be counted) and smears the finders' rings: 4.2 px modules
+/// under a 5 px box, 5.8 px under a 7 px one. The finders, the phase of the
+/// timing lines and the blur-aware threshold still read every frame.
+#[test]
+fn blur_wider_than_a_module() {
+    for (name, fill, blur) in [("4.2 px modules, blur 2", 0.27, 2), ("5.8 px modules, blur 3", 0.37, 3)] {
+        let case = Case {
+            cols: 120,
+            rows: 40,
+            fill,
+            blur,
+            noise: 6.0,
+            line_gap: 2,
+            levels: (30.0, 220.0),
+            yaw: 4.0,
+            pitch: -3.0,
+            roll: 2.0,
+            ..Case::default()
+        };
+        let out = film(&case, 4);
+        report(name, &out);
+        let (_, pass, wrong, det) = summary(&out);
+        assert!(det == 4 && pass >= 0.95 && wrong == 0, "{name}: FI {det}/4, tiles {pass}, wrong {wrong}");
+    }
+}
+
 #[test]
 fn perspective_and_rotation() {
     let base = moderate();
@@ -261,8 +288,8 @@ fn nothing_found_in_frames_without_a_grid() {
     assert!(vision.process(&[0; 100], 10, 10).is_none());
 }
 
-/// Barrel distortion bends the grid away from any homography; past 0.3 module
-/// of timing-line residual the edge-based correction kicks in and fixes most of it.
+/// Barrel distortion bends the grid away from any homography; past 0.1 module
+/// of timing-line residual the timing-line correction kicks in and fixes most of it.
 #[test]
 fn lens_distortion_correction() {
     let case = Case { radial: 0.0175, blur: 1, noise: 6.0, ..Case::default() };
