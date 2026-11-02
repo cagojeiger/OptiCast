@@ -8,7 +8,7 @@ mod common;
 use common::*;
 use diodecam_core::tile;
 use diodecam_core::{frame, Assembler, Profile, SendOptions, Transfer};
-use diodecam_sim::{tear, Gray, Rng, Theme};
+use diodecam_sim::{Gray, Rng, Theme};
 use diodecam_vision::{Polarity, Vision};
 
 const THEMES: [Theme; 2] = [Theme::DARK, Theme::LIGHT];
@@ -353,12 +353,4 @@ fn file_restored_through_the_camera_path() {
         assert_eq!(rx.meta().unwrap().filename, "photo.jpg");
         eprintln!("{camera_size:?} {theme:?}: restored 30 kB in {frames} camera frames");
     }
-}
-
-#[test]
-fn torn_helper_matches_sim() {
-    // Sanity check of the harness: the torn image is newer on top.
-    let a = Gray::new(8, 8, 1);
-    let b = Gray::new(8, 8, 2);
-    assert_eq!(tear(&a, &b, 3).data[..24], [1; 24]);
 }

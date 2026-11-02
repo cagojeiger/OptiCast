@@ -266,6 +266,35 @@ mod tests {
         assert_eq!(Tile::decode_codeword(&cw), Err(TileError::BadCrc));
     }
 
+    /// Screen bytes are untrusted: a codeword that passes RS and the CRC-32C can
+    /// still carry a type byte from a newer sender, or a nonzero flags byte.
+    #[test]
+    fn unknown_kind_is_rejected_and_flags_are_ignored() {
+        let on_screen = |d: &mut [u8; DATA_BYTES], n: usize| {
+            let crc = crate::crc32c(&d[..104]);
+            d[104..].copy_from_slice(&crc.to_be_bytes());
+            let mut raw: Codeword = reed_solomon::Encoder::new(PARITY_BYTES).encode(&d[..])[..].try_into().unwrap();
+            whiten(&mut raw, n);
+            decode(&raw, n)
+        };
+        let tile = Tile::data(0xBEEF, 7, 0xABCDEF, [0x5A; CONTENT_BYTES]);
+        for kind in [0, 3, 0x7F, 0xFF] {
+            let mut d = tile.to_bytes();
+            d[0] = kind;
+            assert_eq!(on_screen(&mut d, 4), Err(TileError::UnknownKind(kind)));
+        }
+        // The flags byte is not part of the tile: any value decodes to the same tile.
+        for flags in [1, 0x80, 0xFF] {
+            let mut d = tile.to_bytes();
+            d[1] = flags;
+            assert_eq!(on_screen(&mut d, 4), Ok(tile.clone()));
+        }
+        let meta = Tile::meta(0x1234, [3; CONTENT_BYTES]);
+        let mut d = meta.to_bytes();
+        d[1] = 0xFF;
+        assert_eq!(on_screen(&mut d, 0), Ok(meta));
+    }
+
     #[test]
     fn header_fields() {
         let tile = Tile::data(0xBEEF, 7, 0xABCDEF, [0x5A; CONTENT_BYTES]);
