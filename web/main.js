@@ -505,6 +505,8 @@ async function startCamera() {
     const track = stream.getVideoTracks()[0]
     settings = track?.getSettings() ?? {}
     lens = track?.label ?? ''
+    // Another app or the system can take the camera (a call, the Camera app): frames just stop.
+    if (track) track.onended = () => cameraLost(opened)
     video.srcObject = stream
     await video.play()
     if (gen !== loopGen) return // stopped meanwhile; stopCamera() released the stream
@@ -589,6 +591,18 @@ async function keepAwake() {
   } catch {
     wakeLock = null
   }
+}
+
+/**
+ * The camera ended without this page stopping it (stop() does not fire `ended`): stop, and say
+ * so, instead of a strip that keeps saying Receiving over a frozen picture.
+ * @param {MediaStream} lost
+ */
+function cameraLost(lost) {
+  if (stream !== lost) return
+  stopCamera()
+  notice = { text: 'The camera was taken by another app. Start again.', tone: 'bad' }
+  queueRender()
 }
 
 function stopCamera() {
