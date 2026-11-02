@@ -21,7 +21,7 @@ SSH 터미널에 그린 흑백 격자를 폰 카메라로 찍어 파일을 옮�
    새로고침하면 받은 파일이 다시 보인다.
 
 키: `+`/`-` fps, space 일시정지, `q` 종료. 옵션: `--fps`(기본 24), `--max-bytes`(기본 64MiB), `--profile auto|ssh|vt100`,
-`--no-compress`. 수신기 주소 옵션: `?max=256`(MiB, 최대 512), `?scan=1920`, `?debug=1`.
+`--no-compress`. 수신기 주소 옵션: `?max=256`(MiB, 최대 512), `?scan=1920`, `?receiver=1`(데스크톱에서도 수신기), `?debug=1`.
 
 ## 속도
 

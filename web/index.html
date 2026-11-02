@@ -93,7 +93,7 @@
       <p class="muted">The sender runs on the machine that has the file. On that machine:</p>
       <div class="code"><pre id="cmd-curl-sheet">curl -fsSL https://github.com/cagojeiger/diodecam/releases/latest/download/diodecam-x86_64-unknown-linux-musl.tar.gz | tar xz
 ./diodecam-x86_64-unknown-linux-musl/diodecam send &lt;FILE&gt;</pre><button type="button" class="copy" data-copy="cmd-curl-sheet">Copy</button></div>
-      <p class="muted">Other targets: <code>aarch64-unknown-linux-musl</code>, <code>aarch64-apple-darwin</code>, <code>x86_64-apple-darwin</code>. The full guide is on this address on a computer.</p>
+      <p class="muted">Other targets: <code>aarch64-unknown-linux-musl</code>, <code>aarch64-apple-darwin</code>, <code>x86_64-apple-darwin</code>. The setup steps are on this address on a computer.</p>
       <button id="send-link" class="primary wide" data-testid="send-link"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" /></svg>Send link to a computer</button>
     </dialog>
 
@@ -120,6 +120,7 @@
           <option value="">Auto (back camera)</option>
         </select>
       </label>
+      <p class="note">iPhone Pro losing the grid up close? Choose "Back Camera" (one lens) to stop the automatic lens switch.</p>
       <button id="copy" class="wide" data-testid="copy">Copy diagnostics</button>
       <p class="note">
         Diagnostics hold device, camera and recognition numbers only, never the file's name, size or content. Everything
@@ -128,7 +129,7 @@
       <pre id="debug" data-testid="debug" hidden></pre>
     </dialog>
 
-    <!-- Desktop view: four steps in two columns (DESIGN.md). Everything else is help.html. No camera here. -->
+    <!-- Desktop view: four steps in two columns (DESIGN.md). The two step-1 questions go to help.html. No camera here. -->
     <section id="setup" class="setup" aria-label="How to use">
       <header class="setup-head">
         <h1>DiodeCam</h1>
@@ -180,7 +181,6 @@
 
       <footer class="setup-foot">
         <span>v0.3.0</span>
-        <a href="./help.html">Help</a>
         <a href="./privacy.html">Privacy</a>
         <a href="./terms.html">Terms</a>
         <a href="./licenses.html">Licenses</a>
