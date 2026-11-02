@@ -30,16 +30,17 @@
 export const MIN_MODULE_PX = 4.5
 
 /**
- * Keeps samples no older than `windowMs` before the newest one.
+ * Keeps samples no older than `windowMs` before `now` (default: the newest sample). Reading
+ * the screen's numbers, `now` is the clock, so a window empties when samples stop coming.
  * @template {{ t: number }} T
  * @param {T[]} samples
  * @param {number} windowMs
+ * @param {number} [now]
  */
-export function trim(samples, windowMs) {
-  const last = samples[samples.length - 1]
-  if (!last) return samples
-  const i = samples.findIndex((s) => s.t >= last.t - windowMs)
-  return i > 0 ? samples.slice(i) : samples
+export function trim(samples, windowMs, now = samples[samples.length - 1]?.t) {
+  if (now === undefined) return samples
+  const i = samples.findIndex((s) => s.t >= now - windowMs)
+  return i < 0 ? [] : i > 0 ? samples.slice(i) : samples
 }
 
 /**

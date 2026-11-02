@@ -42,15 +42,17 @@
 | 시작 전 | 가이드, 안내 | ○ Idle | Start (주) | 비활성 | 비활성 | 비활성 |
 | 받는 중 | 영상, 테두리, 링 | ● Receiving | Stop | 비활성 | 비활성 | 활성 |
 | 완료 | ✓ | ✓ Received · SHA-256 verified | Start | 활성 | 활성 (주, 공유 시트가 파일을 받을 때) | 활성 |
-| 오류 | 가이드 | ✕ Error | Start | 받은 파일 있으면 | 받은 파일 있으면 | 활성 |
+| 오류 | 가이드 | ✕ Error | Start (디코더 오류면 Reload) | 받은 파일 있으면 | 받은 파일 있으면 | 활성 |
 
 | 상황 | 표시 |
 |---|---|
 | 검증 실패 | 안내 줄 `Verification failed, collecting again`, 저장분을 버리고 다시 모은다 |
 | [Stop] | `Paused. Start the camera to continue.` |
 | 상한 초과 | `File too large: N MiB > limit 64 MiB (change it with ?max=)` (메모리를 잡기 전에 거부) |
-| 디코더 오류 | 안내 줄 `Decoder error. Reload to resume from the saved progress.` (카메라 정지) |
+| 디코더 오류 | 띠 ✕ Error와 `Decoder error. Reload to resume from the saved progress.` (카메라 정지, 여는 중이던 카메라는 켜지 않는다). Start 자리의 버튼이 **Reload**가 된다(홈 화면 앱에는 새로고침 단추가 없다) |
 | 카메라 불가 | 띠 ✕ Error와 한 문장: 권한 거부 `Camera permission denied. …`, 카메라 없음 `No camera found on this device.`, 다른 앱이 사용 중 `The camera is in use by another app. …`, 요청한 설정 불가 `This camera cannot give the requested video. …`, HTTPS/localhost가 아님 `The camera is unavailable. …`. 그 밖의 오류는 브라우저의 메시지 |
+| 카메라를 빼앗김 | 통화·다른 앱·시스템이 카메라를 가져가 트랙이 끝나면(`ended`) 카메라를 멈추고 띠 ✕ Error와 `The camera was taken by another app. Start again.` Start는 활성(다시 켜면 이어 받는다) |
+| 카메라 일시 정지 | iOS는 통화·백그라운드에서 트랙을 끝내지 않고 음소거(`mute`)한다. 그동안 경고 `The camera is paused by the system.`, `unmute`면 지운다. 띠는 그대로(수신 상태 유지) |
 | 이어 받기 실패 | 저장분을 불러오다 메모리가 모자라면 카메라 위에 주황 글 `Could not restore the saved progress. Collecting again; reload to retry.` 받기는 계속되고 띠는 ● Receiving 그대로다. 저장분은 지우지 않는다 |
 | 받은 파일이 남음 | 새로고침 뒤: `The file from last time is still here. Save or share it.` + ✓ 띠(받은 시각) |
 
@@ -111,9 +113,13 @@
 - **카메라 선택**: 아이폰 Pro의 기본 후면 카메라(트리플·듀얼 광각)는 가까이 찍을 때 광각과 초광각을 스스로 오간다(iOS 17+).
   웹에서는 막을 수 없으므로 목록에서 단일 렌즈("Back Camera")를 고를 수 있다. 선택은 이 브라우저에만 기억하고(localStorage),
   그 카메라가 없으면 기본 카메라로 돌아간다.
-- **[Copy diagnostics]**: 카메라를 켠 뒤의 기록을 JSON으로 클립보드에 넣는다. 앱 버전, 브라우저, 렌즈 이름, 카메라 설정과
-  `getCapabilities()`, 단계별 프레임 수, 모듈 크기 분위수, 잔차, 최근 fps·인식률·조언, 격자, 진행률이 담긴다.
-  파일 이름·내용·크기, 전송 ID(둘을 합치면 어떤 파일인지 대조할 수 있다), 장치 ID는 넣지 않는다. 렌즈를 바꿔 가며 복사한 두 기록을 비교하면 렌즈 전환이 원인인지 알 수 있다.
+- **[Copy diagnostics]**: 카메라를 켠 뒤의 기록을 JSON으로 클립보드에 넣는다. 앱 버전, 브라우저, 렌즈 이름, 카메라 설정(복사할 때 트랙에서
+  다시 읽는다)과 `getCapabilities()`, 단계별 프레임 수, 모듈 크기 분위수, 잔차, 끊김(`gaps`: 500 ms 넘게 카메라 프레임이 오지 않은 구간의
+  수·합계·최장·최근 10개), 최근 fps·인식률·조언과 마지막 프레임 뒤 경과 시간(`last_frame_ms`), 격자, 진행률이 담긴다.
+  파일 이름·내용·크기, 전송 ID(둘을 합치면 어떤 파일인지 대조할 수 있다), 장치 ID는 넣지 않는다(`view.js`가 필드를 골라 담는다). 렌즈를 바꿔 가며 복사한 두 기록을 비교하면 렌즈 전환이 원인인지 알 수 있다.
+- **최근 값의 창**: fps·인식률·실패 단계·조언은 최근 2초, 남은 시간은 최근 5초다. 창은 가장 새 표본이 아니라 지금 시각에서 끝나므로,
+  프레임이 끊기면(회전, 카메라를 빼앗김) 마지막 값에 멈추지 않고 비워진다. 회전으로 영상 크기가 바뀌면(video `resize`) 카메라 설정을
+  다시 읽는다. 카메라를 다시 켜지는 않는다.
 
 ## 7. 영상 처리 (`crates/diodecam-vision`)
 
@@ -149,6 +155,7 @@
 | `worker.js` | WASM 수신기를 소유. 프레임마다 정확히 한 번 응답, 예외는 치명 오류 |
 | `wasm.js` | `diodecam.wasm`(C ABI) 래퍼 |
 | `metrics.js` | 인식률·속도·남은 시간·모듈 크기·실패 단계·조언 같은 순수 함수 |
+| `view.js` | 순수 함수: 상태 → 화면(띠, 버튼 활성, 안내 줄, 카메라 위 글, 링·✓)과 스냅숏 → 진단 JSON. `main.js`의 `render()`가 결과를 화면에 옮긴다 |
 | `store.js` | IndexedDB: 이어 받기 타일, 받은 파일 |
 | `sw.js`, `manifest.webmanifest`, `icon-*.png` | 홈 화면 앱과 오프라인 캐시(아이콘은 `node tools/icons.ts`로 만든다) |
 

@@ -13,7 +13,8 @@ import { randomBytes, senderFrames } from '../tools/sim/sender.ts'
 import { VTerm } from '../tools/sim/vterm.ts'
 import { MIN_MODULE_PX, captureWidth, eta, failure, formatBytes, formatSeconds, fps, hint, limitMib, moduleSize, quantile, recognition, safeName, scanWidth, symbolRate, tooLargeText, trim, type FrameSample, type Stage } from '../web/metrics.js'
 import { evictable, exportTiles, keepable, shouldSave, type KeptFile, type SavedMeta } from '../web/store.js'
-import { OUT_OF_MEMORY, WasmReceiver } from '../web/wasm.js'
+import { diagnostics, view, type DiagnosticsSnapshot, type View, type ViewState } from '../web/view.js'
+import { OUT_OF_MEMORY, WasmReceiver, type ReceiverStats } from '../web/wasm.js'
 
 const frame = (t: number, tilesOk: number, tiles = 10, grid = true): FrameSample => ({ t, grid, tilesOk, tiles })
 const miss = (t: number, stage: Stage): FrameSample => ({ t, grid: false, tilesOk: 0, tiles: 0, stage })
@@ -28,6 +29,12 @@ describe('metrics', () => {
       [1000, 2600, 3000],
     )
     assert.deepEqual(trim([], 2000), [])
+    // Read on the clock: the window ends now, and empties once samples stop coming.
+    assert.deepEqual(
+      trim(s, 2000, 4000).map((f) => f.t),
+      [2600, 3000],
+    )
+    assert.deepEqual(trim(s, 2000, 10_000), [])
   })
 
   it('recognition is tiles passed over tiles tried', () => {
@@ -108,6 +115,168 @@ describe('metrics', () => {
     assert.equal(safeName(''), 'file')
     assert.equal(safeName('..'), 'file')
     assert.equal(safeName('보고서.pdf'), '보고서.pdf')
+  })
+})
+
+describe('view', () => {
+  const meta = { name: 'a.bin', size: 10, id: 'abcd1234', compression: 'none' }
+  const stats = (have: number, need: number | null, done = false): ViewState['stats'] => ({ meta, done, symbols: { have, need }, too_large: null, limit: 64 * 2 ** 20 })
+  const offer = (canShare = true): ViewState['offer'] => ({ saved: false, restored: false, at: 0, canShare })
+  const state = (over: Partial<ViewState> = {}): ViewState => ({
+    scanning: false,
+    starting: false,
+    fatal: '',
+    notice: null,
+    offer: null,
+    stats: null,
+    resumed: 0,
+    workerError: '',
+    rate: null,
+    left: null,
+    hint: null,
+    gridSeen: false,
+    ...over,
+  })
+  const enabled = (v: View) =>
+    Object.entries(v.buttons)
+      .filter(([, b]) => b.enabled)
+      .map(([k]) => k)
+  const primary = (v: View) =>
+    Object.entries(v.buttons)
+      .filter(([, b]) => 'primary' in b && b.primary)
+      .map(([k]) => k)
+
+  it('follows the interaction-state table (DESIGN.md)', () => {
+    // [state, strip, enabled buttons, primary buttons, ring, tick]
+    const table: [string, ViewState, View['strip']['state'], string[], string[], boolean, boolean][] = [
+      ['idle', state(), 'idle', ['start'], ['start'], false, false],
+      ['looking', state({ scanning: true }), 'idle', ['start', 'reset'], [], false, false],
+      ['receiving', state({ scanning: true, stats: stats(40, 100) }), 'receiving', ['start', 'reset'], [], true, false],
+      ['paused', state({ stats: stats(40, 100) }), 'idle', ['start', 'reset'], ['start'], false, false],
+      ['done, share sheet', state({ offer: offer(), stats: stats(100, 100, true) }), 'done', ['start', 'download', 'share', 'reset'], ['share'], false, true],
+      ['done, download only', state({ offer: offer(false) }), 'done', ['start', 'download', 'reset'], ['download'], false, true],
+      ['error', state({ notice: { text: 'No camera found on this device.', tone: 'bad' } }), 'error', ['start', 'reset'], [], false, false],
+      ['error, kept file', state({ notice: { text: 'x', tone: 'bad' }, offer: offer() }), 'error', ['start', 'download', 'share', 'reset'], ['share'], false, false],
+      ['camera lost mid-transfer', state({ notice: { text: 'The camera was taken by another app. Start again.', tone: 'bad' }, stats: stats(40, 100) }), 'error', ['start', 'reset'], [], false, false],
+      ['camera paused by the system', state({ scanning: true, notice: { text: 'The camera is paused by the system.', tone: 'warn' }, stats: stats(40, 100) }), 'receiving', ['start', 'reset'], [], true, false],
+      ['opening the camera', state({ starting: true }), 'idle', [], ['start'], false, false],
+      // Start becomes Reload: the only way back, and the home-screen app has no reload control.
+      ['decoder gone', state({ fatal: 'Decoder error.', stats: stats(40, 100) }), 'error', ['start', 'reset'], ['start'], false, false],
+      ['decoder gone while opening', state({ fatal: 'Decoder error.', starting: true }), 'error', ['start', 'reset'], ['start'], false, false],
+      ['decoder gone, kept file', state({ fatal: 'Decoder error.', offer: offer(false) }), 'error', ['start', 'download', 'reset'], ['download'], false, false],
+    ]
+    for (const [name, s, strip, on, primaries, ring, tick] of table) {
+      const v = view(s)
+      assert.equal(v.strip.state, strip, `${name}: strip`)
+      assert.deepEqual(enabled(v), on, `${name}: enabled buttons`)
+      assert.deepEqual(primary(v), primaries, `${name}: primary buttons`)
+      assert.equal(v.ring, ring, `${name}: ring`)
+      assert.equal(v.tick, tick, `${name}: tick`)
+      assert.equal(v.prompt, !tick, `${name}: prompt`)
+      assert.equal(v.buttons.start.label, s.fatal ? 'Reload' : s.scanning ? 'Stop' : 'Start', `${name}: start label`)
+    }
+  })
+
+  it('words the strip, hint and status for the state', () => {
+    const receiving = view(state({ scanning: true, stats: stats(1234, 5000), rate: 0.875, left: 75, resumed: 300 }))
+    assert.deepEqual(receiving.strip, { state: 'receiving', label: '● Receiving', symbols: '1,234 / 5,000', extra: '88% read · 300 resumed', right: '1 min 15 s left' })
+    assert.equal(receiving.status.text, '3,766 pieces to go · about 1 min 15 s')
+    assert.equal(view(state({ scanning: true, stats: stats(1, 5), hint: 'rotate' })).hint.text, '⚠ Hold the phone sideways for a larger grid')
+    assert.equal(view(state({ scanning: true, gridSeen: true })).status.text, 'Grid found. Waiting for the file header…')
+    assert.equal(view(state({ offer: offer() })).hint.text, 'Save it, then press q in the terminal')
+    const error = view(state({ notice: { text: 'No camera found on this device.', tone: 'bad' } }))
+    assert.equal(error.strip.extra, 'No camera found on this device.')
+    assert.deepEqual(error.status, { text: 'No camera found on this device.', tone: 'bad' })
+    // A warning (a failed share, a failed restore) is not an error.
+    assert.equal(view(state({ scanning: true, stats: stats(1, 5), notice: { text: 'w', tone: 'warn' } })).strip.state, 'receiving')
+    assert.equal(view(state({ stats: stats(50, 100) })).fraction, 0.5)
+    assert.equal(view(state({ offer: offer(), stats: stats(50, 100) })).fraction, 1, 'a kept file fills the bar')
+  })
+
+  // A snapshot as main.js builds it, holding what must never be copied: the decoder's answer names
+  // the file, and the camera settings carry device ids.
+  const secret = { name: 'quarterly-secret-report.pdf', size: 987_654_321, id: 'c0ffee42', content: new TextEncoder().encode('TOP-SECRET-CONTENT') }
+  const devices = { deviceId: 'device-5a1b2c3d', groupId: 'group-9e8f7a6b' }
+  const decoder: ReceiverStats = {
+    frames: 90,
+    detected: true,
+    stage: 'done',
+    grid: { w: 119, h: 76, profile: 'ssh' },
+    corners: [10, 10, 410, 10, 410, 310, 10, 310],
+    tiles: { ok: 9, total: 10 },
+    totals: { frames: 90, detections: 80, tiles_ok: 700, tiles: 800 },
+    symbols: { have: 400, need: 1000 },
+    meta: { name: secret.name, size: secret.size, id: secret.id, compression: 'zstd' },
+    limit: 64 * 2 ** 20,
+    too_large: { id: secret.id, size: secret.size },
+    too_large_count: 1,
+    foreign: 0,
+    duplicates: 3,
+    invalid: 0,
+    failed: 0,
+    done: false,
+    error: null,
+    kept: 400,
+    tile_status: '1111111110',
+  }
+  const snapshot = (over: Partial<DiagnosticsSnapshot> = {}) => ({
+    app: 'DiodeCam test',
+    at: '2026-11-02T00:00:00.000Z',
+    now: 10_000,
+    agent: 'test agent',
+    standalone: false,
+    viewport: '390×844 @3x',
+    lens: 'Back Camera',
+    manualCamera: true,
+    video: { width: 1920, height: 1080 },
+    scan: { width: 1920, height: 1080 },
+    settings: { ...devices, width: 1920, height: 1080, frameRate: 30 },
+    capabilities: { ...devices, width: { min: 1, max: 4032 } },
+    session: {
+      started: 0,
+      frames: 90,
+      stages: { done: 80, finders: 10 },
+      detections: 80,
+      tracked: 70,
+      corrected: 5,
+      modules: [7.5, 7.7],
+      residuals: [0.05],
+      lastFrame: 9333,
+      gaps: { count: 1, ms: 800, longest: 800, last: [{ at: 4000, ms: 800 }] },
+    },
+    scanning: true,
+    frames: [frame(9000, 9), frame(9500, 8)],
+    captureTimes: [9000, 9033, 9066, 9100, 9133, 9166, 9200, 9233, 9266, 9300, 9333],
+    resultTimes: [9000, 9500],
+    decodeMs: 12.34,
+    stats: decoder,
+    ...over,
+    // More of what the page holds; a snapshot never has it, and it would not be copied if it did.
+    file: secret.content,
+    offer: { name: secret.name, size: secret.size, id: secret.id },
+  })
+
+  it('diagnostics never carry the file name, size, content, transfer id or device ids', () => {
+    const copied = diagnostics(snapshot())
+    const json = JSON.stringify(copied)
+    const { name, size, id, content } = secret
+    const secrets = [name, String(size), size.toLocaleString('en-US'), formatBytes(size), id, new TextDecoder().decode(content), JSON.stringify(content).slice(0, 30), devices.deviceId, devices.groupId]
+    for (const s of secrets) assert.ok(!json.includes(s), `the diagnostics contain ${s}`)
+    // Not vacuous: the camera and recognition numbers are there.
+    assert.equal(copied.camera.lens, 'Back Camera')
+    assert.deepEqual(copied.camera.settings, { width: 1920, height: 1080, frameRate: 30 })
+    assert.deepEqual(copied.transfer, { progress: 0.4, foreign: 0, invalid: 0, failed: 0, done: false })
+    assert.deepEqual(copied.grid, { w: 119, h: 76, profile: 'ssh' })
+    assert.equal(copied.recent.capture_fps, 30)
+  })
+
+  it('diagnostics windows end when the copy is made, and the gaps show', () => {
+    const live = diagnostics(snapshot())
+    assert.deepEqual(live.recent, { capture_fps: 30, process_fps: 2, decode_ms: 12.3, recognition: 0.85, hint: null, last_frame_ms: 667 })
+    assert.deepEqual(live.session.gaps, { count: 1, total_ms: 800, longest_ms: 800, last: [{ at_s: 4, ms: 800 }] })
+    // Copied 5 s after the frames stopped (a rotation, a taken camera): blank, not the last values.
+    const late = diagnostics(snapshot({ now: 14_333 }))
+    assert.deepEqual(late.recent, { capture_fps: null, process_fps: null, decode_ms: 12.3, recognition: null, hint: null, last_frame_ms: 5000 })
   })
 })
 

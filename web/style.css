@@ -20,6 +20,7 @@
   --bad: #b91c1c;
   --camera: #0a0a0a;
   --on-strip: #ffffff;
+  --backdrop: rgba(0, 0, 0, 0.35);
   --gutter: 16px;
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   font-family: system-ui, -apple-system, 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
@@ -46,6 +47,7 @@
     --warn: #fbbf24;
     --bad: #f87171;
     --on-strip: #171717;
+    --backdrop: rgba(0, 0, 0, 0.6);
   }
 }
 
@@ -71,6 +73,7 @@
     --warn: #fbbf24;
     --bad: #f87171;
     --on-strip: #171717;
+    --backdrop: rgba(0, 0, 0, 0.6);
 }
 
 * {
@@ -482,16 +485,18 @@ a:focus-visible {
   outline-offset: 2px;
 }
 
+/* The tracks never grow for a label (Reload is longer than Start): the page stays one column wide. */
 .actions {
   grid-area: actions;
   display: grid;
-  grid-template-columns: 0.9fr 1fr 1.3fr;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.3fr);
   gap: 8px;
 }
 
 .actions button {
   min-height: 52px;
-  padding: 0 8px;
+  min-width: 0;
+  padding: 0 6px;
 }
 
 /* --- sheets -------------------------------------------------------------------------- */
@@ -516,18 +521,9 @@ a:focus-visible {
   display: grid;
 }
 
+/* ::backdrop inherits from its dialog (Safari 17.4+); older engines keep the light dim. */
 .sheet::backdrop {
-  background: rgba(0, 0, 0, 0.35);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .sheet::backdrop {
-    background: rgba(0, 0, 0, 0.6);
-  }
-}
-
-:root[data-theme='dark'] .sheet::backdrop {
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--backdrop, rgba(0, 0, 0, 0.35));
 }
 
 .handle {

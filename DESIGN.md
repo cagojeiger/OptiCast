@@ -86,7 +86,7 @@ keyboard focus and the detected-grid outline.
 Roles (values in `web/style.css`): `bg`, `panel`, `surface`, `line`, `text`, `text-2`, `muted`,
 `disabled`, `link`, `invert-bg`/`invert-text` (primary action and the receiving strip), `secondary`,
 `signal` (green on the camera), `done`, `warn`, `bad`, `on-strip` (text on the done and error strips),
-`camera`, `mono` (the monospace stack).
+`backdrop` (the dim behind a sheet), `camera`, `mono` (the monospace stack).
 
 ## Components
 
@@ -123,9 +123,11 @@ the receiver (used by the e2e in desktop Chrome).
 | Idle | guides, prompt | ○ gray | Start (primary) | disabled | disabled | disabled |
 | Receiving | video, outline, ring | ● inverted | Stop (secondary) | disabled | disabled | enabled |
 | Done | ✓ disc | ✓ green | Start (secondary) | enabled | enabled (primary) | enabled |
-| Error | guides | ✕ red | Start (secondary) | by kept file | by kept file | enabled |
+| Error | guides | ✕ red | Start (secondary); Reload when the decoder is gone | by kept file | by kept file | enabled |
 
-Reset asks once when an unsaved file exists.
+Reset asks once when an unsaved file exists. When the decoder is gone only a reload helps (it resumes
+from the saved progress), so Start becomes Reload in the same place, primary unless a kept file is on
+offer: the home-screen app has no reload control.
 
 ## Content voice
 

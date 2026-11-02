@@ -7,7 +7,6 @@
 // the commit, so a browser never mixes files from two deploys.
 
 import {
-  HINT_TEXT,
   STAGE_TEXT,
   eta,
   failure,
@@ -24,12 +23,13 @@ import {
   scanWidth,
   symbolRate,
   thousands,
-  tooLargeText,
   trim,
 } from './metrics.js?v=__V__'
 import * as store from './store.js?v=__V__'
+import { diagnostics, view } from './view.js?v=__V__'
 
 /** @import { FrameSample, ProgressSample } from './metrics.js' */
+/** @import { Session } from './view.js' */
 /** @import { ReceiverStats } from './wasm.js' */
 /** @import { FromWorker, ToWorker } from './worker.js' */
 
@@ -170,22 +170,23 @@ let renderQueued = false
 /** @type {WakeLockSentinel | null} */
 let wakeLock = null
 
-/** Diagnostics since the camera started (docs/web.md §6): where frames stopped, and how good the grids were. */
+/** @returns {Session} Diagnostics since the camera started (docs/web.md §6). */
 function newSession() {
   return {
     started: performance.now(),
     frames: 0,
-    /** @type {Record<string, number>} */
     stages: {},
     detections: 0,
     tracked: 0,
     corrected: 0,
-    /** @type {number[]} */
     modules: [],
-    /** @type {number[]} */
     residuals: [],
+    lastFrame: null,
+    gaps: { count: 0, ms: 0, longest: 0, last: [] },
   }
 }
+/** No camera frame for longer than this is a gap in the session's record. */
+const GAP_MS = 500
 let session = newSession()
 
 /** @param {string} d */
@@ -222,6 +223,15 @@ function onFrame(now, gen) {
   try {
     captureTimes.push(now)
     captureTimes = captureTimes.filter((t) => t > now - 2000)
+    const gap = session.lastFrame === null ? 0 : now - session.lastFrame
+    if (gap > GAP_MS) {
+      const g = session.gaps
+      g.count++
+      g.ms += gap
+      g.longest = Math.max(g.longest, gap)
+      g.last = [...g.last.slice(-9), { at: now - gap, ms: gap }]
+    }
+    session.lastFrame = now
     if (!busy) grab(now)
   } catch (err) {
     workerError = `Could not read a frame: ${/** @type {Error} */ (err).message}`
@@ -278,7 +288,6 @@ worker.onerror = (event) => {
 /** The decoder is gone: stop, and let a reload pick up the saved progress. */
 function fatal() {
   stopCamera()
-  startBtn.disabled = true
   fatalError = 'Decoder error. Reload to resume from the saved progress.'
 }
 
@@ -376,10 +385,17 @@ function queueRender() {
   })
 }
 
+/** Start's icon by its label: play, stop, and the reset arrow for Reload. */
+const START_ICON = { Start: 'M7 4l13 8-13 8z', Stop: 'M5 5h14v14H5z', Reload: 'M3 12a9 9 0 1 0 3-6.7M3 4v5h5' }
+
 function render() {
   const s = last
-  const capture = fps(captureTimes)
-  const processed = fps(resultTimes)
+  // The windows end now, not at the newest sample: when frames stop (a rotation, a taken
+  // camera), the recent numbers go blank instead of freezing at their last values.
+  const now = performance.now()
+  const recent = trim(frames, 2000, now)
+  const capture = fps(captureTimes.filter((t) => t > now - 2000))
+  const processed = fps(resultTimes.filter((t) => t > now - 2000))
   const setFps = settings.frameRate ? Math.round(settings.frameRate) : null
   stat.capture.textContent = scanning
     ? `${capture === null ? '—' : Math.round(capture)} fps${setFps ? ` (set ${setFps})` : ''}`
@@ -390,13 +406,13 @@ function render() {
   stat.lens.textContent = lens || '—'
   stat.process.textContent = processed === null ? '—' : `${Math.round(processed)} fps`
   stat.ms.textContent = decodeMs ? `${decodeMs.toFixed(1)} ms` : '—'
-  const rate = recognition(frames)
+  const rate = recognition(recent)
   stat.recognition.textContent = rate === null ? '—' : `${Math.round(rate * 100)}%`
   stat.grid.textContent = s?.grid ? `${s.grid.w}×${s.grid.h} ${s.grid.profile}` : '—'
-  const module = quantile(frames.map((f) => f.module), 0.5)
+  const module = quantile(recent.map((f) => f.module), 0.5)
   stat.module.textContent = module === null ? '—' : `${module.toFixed(1)} px`
-  const failed = failure(frames)
-  stat.stage.textContent = failed ? `${STAGE_TEXT[failed.stage]} ${Math.round(failed.share * 100)}%` : frames.length && scanning ? 'nothing' : '—'
+  const failed = failure(recent)
+  stat.stage.textContent = failed ? `${STAGE_TEXT[failed.stage]} ${Math.round(failed.share * 100)}%` : recent.length && scanning ? 'nothing' : '—'
   stat.foreign.textContent = s ? thousands(s.foreign) : '0'
   summaryEl.textContent = scanning
     ? [rate === null ? '' : `${Math.round(rate * 100)}% read`, module === null ? '' : `${module.toFixed(1)} px`, capture === null ? '' : `${Math.round(capture)} fps`]
@@ -406,12 +422,8 @@ function render() {
 
   const need = s?.symbols.need ?? null
   const have = s?.symbols.have ?? 0
-  const fraction = need ? Math.min(1, have / need) : 0
-  const left = eta(have, need, symbolRate(progress))
+  const left = eta(have, need, symbolRate(trim(progress, 5000, now)))
   stat.eta.textContent = left === null ? '—' : formatSeconds(left)
-  const error = (!!notice && notice.tone === 'bad') || fatalError !== ''
-  const done = !!offer && !scanning && !error
-  const receiving = scanning && !!s?.meta && !s.done
 
   // File row: the transfer on screen, else the kept file, else nothing.
   if (s?.meta) {
@@ -429,87 +441,57 @@ function render() {
   }
   fileEl.classList.toggle('empty', !s?.meta && !offer)
 
-  // Progress bar, ring and tick.
-  barEl.style.width = `${(done ? 1 : fraction) * 100}%`
-  progressSection.classList.toggle('done', done)
-  ringEl.hidden = !receiving
-  ringEl.style.setProperty('--p', `${fraction * 100}%`)
-  ringLabel.textContent = `${Math.floor(fraction * 100)}%`
-  ringEl.setAttribute('aria-valuenow', String(Math.floor(fraction * 100)))
-  tickEl.hidden = !done
-  promptEl.hidden = done
+  const v = view({
+    scanning,
+    starting,
+    fatal: fatalError,
+    notice,
+    offer: offer && { saved: offer.saved, restored: offer.restored, at: offer.at, canShare: navigator.canShare?.({ files: [offer.file] }) ?? false },
+    stats: s,
+    resumed,
+    workerError,
+    rate,
+    left,
+    hint: hint(recent, video.videoHeight > video.videoWidth),
+    gridSeen: recent.some((f) => f.grid),
+  })
 
-  // The strip: one place, four colors.
-  const resumedText = resumed > 0 ? ` · ${thousands(resumed)} resumed` : ''
-  if (error) {
-    stripEl.dataset.state = 'error'
-    stripState.textContent = '✕ Error'
-    symbolsEl.textContent = ''
-    stripExtra.textContent = fatalError || notice?.text || ''
-    stripRight.textContent = ''
-  } else if (done && offer) {
-    stripEl.dataset.state = 'done'
-    stripState.textContent = '✓ Received'
-    symbolsEl.textContent = 'SHA-256 verified'
-    stripExtra.textContent = ''
-    stripRight.textContent = `at ${new Date(offer.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-  } else if (receiving) {
-    stripEl.dataset.state = 'receiving'
-    stripState.textContent = '● Receiving'
-    symbolsEl.textContent = `${thousands(have)} / ${need === null ? '?' : thousands(need)}`
-    stripExtra.textContent = `${rate === null ? '' : `${Math.round(rate * 100)}% read`}${resumedText}`
-    stripRight.textContent = left === null ? `${Math.floor(fraction * 100)}%` : `${formatSeconds(left)} left`
-  } else {
-    stripEl.dataset.state = 'idle'
-    stripState.textContent = scanning ? '○ Looking' : s?.meta ? '○ Paused' : '○ Idle'
-    symbolsEl.textContent = s?.meta ? `${thousands(have)} / ${need === null ? '?' : thousands(need)}` : ''
-    stripExtra.textContent = ''
-    stripRight.textContent = `${Math.floor(fraction * 100)}%`
-  }
+  // Progress bar, ring and tick.
+  barEl.style.width = `${v.fraction * 100}%`
+  progressSection.classList.toggle('done', v.complete)
+  ringEl.hidden = !v.ring
+  ringEl.style.setProperty('--p', `${v.fraction * 100}%`)
+  ringLabel.textContent = `${Math.floor(v.fraction * 100)}%`
+  ringEl.setAttribute('aria-valuenow', String(Math.floor(v.fraction * 100)))
+  tickEl.hidden = !v.tick
+  promptEl.hidden = !v.prompt
+
+  // The strip: one place, four colours.
+  stripEl.dataset.state = v.strip.state
+  stripState.textContent = v.strip.label
+  symbolsEl.textContent = v.strip.symbols
+  stripExtra.textContent = v.strip.extra
+  stripRight.textContent = v.strip.right
 
   // Buttons: always present; enabled when they can act.
-  startLabel.textContent = scanning ? 'Stop' : 'Start'
-  startBtn.classList.toggle('primary', !scanning && !offer && !error)
-  startBtn.querySelector('svg')?.replaceChildren(pathEl(scanning ? 'M5 5h14v14H5z' : 'M7 4l13 8-13 8z'))
-  const canShare = !!offer && (navigator.canShare?.({ files: [offer.file] }) ?? false)
-  shareBtn.disabled = !canShare || receiving
-  downloadBtn.disabled = !offer || receiving
-  shareBtn.classList.toggle('primary', canShare)
-  downloadBtn.classList.toggle('primary', !!offer && !canShare)
-  resetBtn.disabled = !offer && !s?.meta && !scanning && !error
+  const { start, download, share, reset } = v.buttons
+  startLabel.textContent = start.label
+  startBtn.disabled = !start.enabled
+  startBtn.classList.toggle('primary', start.primary)
+  const startIcon = startBtn.querySelector('svg')
+  startIcon?.classList.toggle('fill', start.label !== 'Reload') // the reload arrow is a stroke
+  startIcon?.replaceChildren(pathEl(START_ICON[start.label]))
+  downloadBtn.disabled = !download.enabled
+  downloadBtn.classList.toggle('primary', download.primary)
+  shareBtn.disabled = !share.enabled
+  shareBtn.classList.toggle('primary', share.primary)
+  resetBtn.disabled = !reset.enabled
 
   // Hint line: always 20 px; the reason a control is off, or what to change.
-  const h = scanning && !s?.done ? hint(frames, video.videoHeight > video.videoWidth) : null
-  if (h) {
-    hintEl.textContent = `⚠ ${HINT_TEXT[h]}`
-    hintEl.dataset.tone = h === 'faster' ? 'ok' : 'warn'
-  } else if (workerError) {
-    hintEl.textContent = workerError
-    hintEl.dataset.tone = 'warn'
-  } else if (done) {
-    hintEl.textContent = offer?.saved ? 'Saved. You can start the next file.' : 'Save it, then press q in the terminal'
-    hintEl.dataset.tone = ''
-  } else {
-    hintEl.textContent = resumed > 0 ? `${thousands(resumed)} pieces resumed from the last session` : 'Share · Save turns on when the file is complete'
-    hintEl.dataset.tone = ''
-  }
-
+  hintEl.textContent = v.hint.text
+  hintEl.dataset.tone = v.hint.tone
   // Status: the prompt over the camera (idle), or the one-line caption while live.
-  if (fatalError) {
-    setStatus(fatalError, 'bad')
-  } else if (notice) {
-    setStatus(notice.text, notice.tone)
-  } else if (starting) {
-    setStatus('Opening the camera…')
-  } else if (s?.too_large && !s.meta) {
-    setStatus(`${tooLargeText(s.too_large.size, s.limit)} · id ${s.too_large.id}`, 'bad')
-  } else if (!scanning) {
-    setStatus(offer ? (offer.restored ? 'The file from last time is still here. Save or share it.' : 'Received. Save the file.') : s?.meta ? 'Paused. Start the camera to continue.' : 'Start the camera and frame the whole sender screen')
-  } else if (!s?.meta) {
-    setStatus(frames.some((f) => f.grid) ? 'Grid found. Waiting for the file header…' : 'Frame the whole sender screen')
-  } else {
-    setStatus(`${thousands(Math.max(0, (need ?? 0) - have))} pieces to go${left === null ? '' : ` · about ${formatSeconds(left)}`}`)
-  }
+  setStatus(v.status.text, v.status.tone)
   if (DEBUG && s) debugEl.textContent = JSON.stringify({ ...s, tile_centers: undefined }, null, 1)
 }
 
@@ -527,7 +509,7 @@ const CAMERA_ERRORS = {
 }
 
 async function startCamera() {
-  if (starting || scanning) return
+  if (starting || scanning || fatalError) return
   notice = null
   if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
     notice = { text: 'The camera is unavailable. Open the page over HTTPS or on localhost.', tone: 'bad' }
@@ -536,15 +518,30 @@ async function startCamera() {
   }
   if (last?.done) reset() // a finished transfer is not resumed: start a new receive
   starting = true
-  startBtn.disabled = true
   queueRender()
+  // stopCamera() bumps loopGen: if the decoder dies while the camera opens, the camera must not start.
+  const gen = loopGen
   try {
-    stream = await openCamera(readCamera())
+    const opened = await openCamera(readCamera())
+    if (gen !== loopGen) {
+      opened.getTracks().forEach((t) => t.stop())
+      return
+    }
+    stream = opened
     const track = stream.getVideoTracks()[0]
     settings = track?.getSettings() ?? {}
     lens = track?.label ?? ''
+    // Another app or the system can take the camera (a call, the Camera app): frames just stop.
+    if (track) {
+      track.onended = () => cameraLost(opened)
+      // iOS mutes the track for a call or when the app goes to the background: say so
+      // instead of keeping Receiving over a frozen picture.
+      track.onmute = () => cameraMuted(opened, true)
+      track.onunmute = () => cameraMuted(opened, false)
+    }
     video.srcObject = stream
     await video.play()
+    if (gen !== loopGen) return // stopped meanwhile; stopCamera() released the stream
     loopGen++ // never two capture chains
     scanning = true
     viewer.classList.add('live')
@@ -554,12 +551,12 @@ async function startCamera() {
     void listCameras()
     schedule(loopGen)
   } catch (err) {
+    if (gen !== loopGen) return // stopped meanwhile (play() is aborted): not a camera error
     stopCamera()
     const { name, message } = /** @type {Error} */ (err)
     notice = { text: CAMERA_ERRORS[name] ?? `Could not open the camera: ${message}`, tone: 'bad' }
   } finally {
     starting = false
-    startBtn.disabled = false
     queueRender()
   }
 }
@@ -626,6 +623,28 @@ async function keepAwake() {
   } catch {
     wakeLock = null
   }
+}
+
+/**
+ * The camera ended without this page stopping it (stop() does not fire `ended`): stop, and say
+ * so, instead of a strip that keeps saying Receiving over a frozen picture.
+ * @param {MediaStream} lost
+ */
+function cameraLost(lost) {
+  if (stream !== lost) return
+  stopCamera()
+  notice = { text: 'The camera was taken by another app. Start again.', tone: 'bad' }
+  queueRender()
+}
+
+const CAMERA_PAUSED = { text: 'The camera is paused by the system.', tone: /** @type {const} */ ('warn') }
+
+/** @param {MediaStream} of @param {boolean} muted */
+function cameraMuted(of, muted) {
+  if (stream !== of) return
+  if (muted) notice = CAMERA_PAUSED
+  else if (notice === CAMERA_PAUSED) notice = null
+  queueRender()
 }
 
 function stopCamera() {
@@ -719,64 +738,34 @@ async function shareFile() {
 
 // --- diagnostics ------------------------------------------------------------------------
 
-/**
- * What `Copy diagnostics` copies: device, camera and recognition numbers. No file name,
- * content, size or transfer ID, and no device IDs.
- */
-function diagnostics() {
+/** `Copy diagnostics` (view.js picks what is copied from this snapshot). */
+function snapshot() {
   const track = stream?.getVideoTracks()[0]
-  /** @param {object | undefined} o */
-  const withoutIds = (o) => (o ? Object.fromEntries(Object.entries(o).filter(([k]) => k !== 'deviceId' && k !== 'groupId')) : null)
-  /** @param {number[]} v @param {number} q */
-  const at = (v, q) => {
-    const x = quantile(v, q)
-    return x === null ? null : Math.round(x * 100) / 100
-  }
-  const s = last
-  const rate = recognition(frames)
-  const capture = fps(captureTimes)
-  const processed = fps(resultTimes)
   return {
     app: `DiodeCam __VERSION__ (${VERSION})`,
     at: new Date().toISOString(),
+    now: performance.now(),
     agent: navigator.userAgent,
     standalone: matchMedia('(display-mode: standalone)').matches,
     viewport: `${innerWidth}×${innerHeight} @${devicePixelRatio}x`,
-    camera: {
-      lens: lens || null,
-      chosen: readCamera() ? 'manual' : 'auto',
-      video: `${video.videoWidth}×${video.videoHeight}`,
-      settings: withoutIds(settings),
-      capabilities: withoutIds(track?.getCapabilities?.()),
-    },
-    scan: `${scanCanvas.width}×${scanCanvas.height}`,
-    session: {
-      seconds: Math.round((performance.now() - session.started) / 1000),
-      frames: session.frames,
-      stages: session.stages,
-      grids: session.detections,
-      tracked: session.tracked,
-      corrected: session.corrected,
-      module_px: { p10: at(session.modules, 0.1), p50: at(session.modules, 0.5), p90: at(session.modules, 0.9) },
-      residual_p50: at(session.residuals, 0.5),
-    },
-    recent: {
-      capture_fps: capture && Math.round(capture),
-      process_fps: processed && Math.round(processed),
-      decode_ms: Math.round(decodeMs * 10) / 10,
-      recognition: rate === null ? null : Math.round(rate * 1000) / 1000,
-      hint: scanning ? hint(frames, video.videoHeight > video.videoWidth) : null,
-    },
-    grid: s?.grid ?? null,
-    // Progress only: the transfer ID and exact size together could identify the file.
-    transfer: s?.meta
-      ? { progress: Math.round((s.symbols.have / (s.symbols.need || 1)) * 100) / 100, foreign: s.foreign, invalid: s.invalid, failed: s.failed, done: s.done }
-      : null,
+    lens,
+    manualCamera: readCamera() !== '',
+    video: { width: video.videoWidth, height: video.videoHeight },
+    scan: { width: scanCanvas.width, height: scanCanvas.height },
+    settings: track?.getSettings() ?? settings,
+    capabilities: track?.getCapabilities?.() ?? null,
+    session,
+    scanning,
+    frames,
+    captureTimes,
+    resultTimes,
+    decodeMs,
+    stats: last,
   }
 }
 
 async function copyDiagnostics() {
-  const text = JSON.stringify(diagnostics(), null, 1)
+  const text = JSON.stringify(diagnostics(snapshot()), null, 1)
   try {
     await navigator.clipboard.writeText(text)
     debugEl.hidden = !DEBUG
@@ -880,7 +869,8 @@ function reset() {
   queueRender()
 }
 
-startBtn.addEventListener('click', () => (scanning ? (stopCamera(), queueRender()) : void startCamera()))
+// Start · Stop, or Reload once the decoder is gone (a reload resumes from the saved progress).
+startBtn.addEventListener('click', () => (fatalError ? location.reload() : scanning ? (stopCamera(), queueRender()) : void startCamera()))
 // Start over: the collected tiles and the kept file both go.
 resetBtn.addEventListener('click', () => {
   if (offer && !offer.saved && !confirm('The received file is not saved yet. Discard it?')) return
@@ -924,6 +914,13 @@ $('send-link').addEventListener('click', () => {
   const url = location.origin + location.pathname
   if (navigator.share) navigator.share({ title: 'DiodeCam', text: 'DiodeCam setup and sender downloads', url }).catch(() => {})
   else navigator.clipboard?.writeText(url).catch(() => {})
+})
+// Turning the phone swaps the camera's width and height: read the track's settings again, so the
+// stats and diagnostics never pair the new picture with the old size. The camera is not restarted.
+video.addEventListener('resize', () => {
+  const track = stream?.getVideoTracks()[0]
+  if (track) settings = track.getSettings()
+  queueRender()
 })
 cameraSelect.addEventListener('change', () => {
   writeCamera(cameraSelect.value)
