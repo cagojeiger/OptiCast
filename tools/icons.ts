@@ -1,5 +1,6 @@
 // App icons (web/icon-*.png) and the favicon (web/icon.svg): a lens ring with the
-// grid the camera reads inside it, on the dark background (DESIGN.md). The motif
+// grid the camera reads inside it, black and white only: the icon is identity,
+// green on the page is a status signal, and the two stay apart (DESIGN.md, Brand). The motif
 // sits inside the middle 70 % so the 512 px one also works as a maskable icon.
 // Plain RGB PNG with 4× supersampling, no dependencies.
 //
@@ -8,9 +9,9 @@
 import { writeFileSync } from 'node:fs'
 import { crc32, deflateSync } from 'node:zlib'
 
-const BG = [0x17, 0x17, 0x17]
-const RING = [0xec, 0xec, 0xec]
-const GRID = [0x34, 0xd3, 0x99]
+const BG = [0x0a, 0x0a, 0x0a]
+const RING = [0xff, 0xff, 0xff]
+const GRID = [0xff, 0xff, 0xff]
 
 // Geometry in a 100-unit box: ring centre (50, 50), radius 34, stroke 6; five 8-unit cells.
 const RING_R = 34

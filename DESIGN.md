@@ -17,7 +17,8 @@
 ## Brand
 
 A quiet tool that sits next to a terminal. Neutral gray in light and dark, one signal hue, no
-decoration. The icon is a lens ring with the grid the camera reads inside it (`tools/icons.ts`).
+decoration. The icon is a lens ring with the grid the camera reads inside it, black and white
+only (`tools/icons.ts`): the icon is identity; green on the page is a status signal.
 
 ## Product goals
 
@@ -26,7 +27,7 @@ decoration. The icon is a lens ring with the grid the camera reads inside it (`t
 | Receive a file with one hand while watching a terminal | Everything fits in iPhone SE Safari's 375×553 without scrolling; the thumb never hunts for a button |
 | The phone is the receiver, the desktop is the setup | A desktop visitor sees install steps, downloads and a QR; a phone visitor sees the camera |
 | Nothing moves | Controls keep position and size across every state; only fill, text and enablement change |
-| Four steps, one fold | Server on the left (Download, Send), phone on the right (Open the receiver, Receive). Everything else lives under one "More" fold |
+| Four steps, nothing else | Server on the left (Download, Send), phone on the right (Open the receiver, Receive). Each card is a title, the action and a sentence or two; everything else is on help.html |
 
 Non-goals: a desktop camera receiver; a general file manager; any upload.
 
@@ -50,15 +51,14 @@ Phone (portrait, one screen)
 Phone (landscape): camera left, the rest in a 250 px column on the right.
 Sheets (from the bottom): Get the sender · Stats and diagnostics / camera picker.
 
-Desktop (pointer: fine, hover: hover) — one screen: the four cards fill the height to the fold, no page scroll from 1024×700 up; shorter or narrower windows fall back to one scrolling column
-  head   title · one line · Light / Dark / Auto · GitHub
+Desktop (pointer: fine, hover: hover) — one screen: the four cards fill the height to the footer, no page scroll from 1024×700 up; shorter or narrower windows fall back to one scrolling column
+  head   title · theme (one button, cycles) · GitHub mark
   left   1 Download             target picker · curl | tar xz · Copy          (the server)
-         2 Send                 file field · send command · Copy · keys
-  right  3 Open the receiver    QR · add to home screen                     (the phone)
+         2 Send                 file field · send command · Copy · a real frame as the picture
+  right  3 Open the receiver    QR · one sentence                           (the phone)
          4 Receive              two sentences
-  below  More (one fold)        air-gapped import · macOS quarantine · storage; open, it takes the flexible row and scrolls inside
-  foot   version · uploads nothing · policy note
-  footer                 version · "uploads nothing" · policy note
+  foot   version · Help · Privacy · Terms · Licenses
+help.html holds everything else: air-gapped import, macOS quarantine, keys and folders, phone notes, storage.
 ```
 
 ## Design principles

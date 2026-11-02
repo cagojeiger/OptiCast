@@ -32,10 +32,6 @@
     }
     set('cmd-curl', `curl -fsSL ${base} | tar xz`)
     set('cmd-run', `./diodecam-${target}/diodecam send ${fileArg()}`)
-    set('cmd-fetch', `curl -fsSLO ${base}\ncurl -fsSLO ${base}.sha256`)
-    set('cmd-verify', `sha256sum -c diodecam-${target}.tar.gz.sha256\ntar xzf diodecam-${target}.tar.gz`)
-    const macTarget = target.endsWith('apple-darwin') ? target : 'aarch64-apple-darwin'
-    set('cmd-xattr', `xattr -d com.apple.quarantine ./diodecam-${macTarget}/diodecam`)
   }
   // The sender runs on the server, usually Linux: x86_64 stays the default; the last choice is remembered.
   const KEY = 'diodecam.target'
@@ -55,29 +51,35 @@
   } catch {
     // not remembered
   }
-  // Theme: a choice is stored and applied before paint by the head script; 'auto' clears it.
+  // Theme: one button cycles auto → light → dark. A choice is stored and applied before
+  // paint by the head script; 'auto' clears it.
   const THEME_KEY = 'diodecam.theme'
-  const themeButtons = /** @type {HTMLButtonElement[]} */ ([...document.querySelectorAll('.theme button')])
+  const themeBtn = /** @type {HTMLButtonElement} */ (document.getElementById('theme-btn'))
+  const half = /** @type {SVGPathElement} */ (/** @type {unknown} */ (document.getElementById('theme-half')))
   const showTheme = () => {
     const chosen = document.documentElement.dataset.theme ?? 'auto'
-    for (const b of themeButtons) b.setAttribute('aria-pressed', String(b.dataset.theme === chosen))
+    themeBtn.setAttribute('aria-label', `Theme: ${chosen}`)
+    themeBtn.title = `Theme: ${chosen} (click to change)`
+    // auto: half disc · light: empty ring · dark: full disc
+    half.setAttribute('d', chosen === 'auto' ? 'M12 3.5a8.5 8.5 0 0 1 0 17z' : chosen === 'dark' ? 'M12 3.5a8.5 8.5 0 1 1 0 17a8.5 8.5 0 1 1 0-17z' : '')
+    const dark = chosen === 'dark' || (chosen === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches)
+    for (const m of document.querySelectorAll('meta[name="theme-color"]')) m.setAttribute('content', dark ? '#171717' : '#ffffff')
   }
-  for (const b of themeButtons)
-    b.addEventListener('click', () => {
-      const t = b.dataset.theme ?? 'auto'
-      if (t === 'auto') delete document.documentElement.dataset.theme
-      else document.documentElement.dataset.theme = t
-      const dark = t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches)
-      for (const m of document.querySelectorAll('meta[name="theme-color"]')) m.setAttribute('content', dark ? '#171717' : '#ffffff')
-      try {
-        if (t === 'auto') localStorage.removeItem(THEME_KEY)
-        else localStorage.setItem(THEME_KEY, t)
-      } catch {
-        // not remembered
-      }
-      showTheme()
-    })
+  themeBtn.addEventListener('click', () => {
+    const order = ['auto', 'light', 'dark']
+    const next = order[(order.indexOf(document.documentElement.dataset.theme ?? 'auto') + 1) % order.length] ?? 'auto'
+    if (next === 'auto') delete document.documentElement.dataset.theme
+    else document.documentElement.dataset.theme = next
+    try {
+      if (next === 'auto') localStorage.removeItem(THEME_KEY)
+      else localStorage.setItem(THEME_KEY, next)
+    } catch {
+      // not remembered
+    }
+    showTheme()
+  })
   showTheme()
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', showTheme)
   for (const b of /** @type {HTMLButtonElement[]} */ ([...document.querySelectorAll('button.copy')])) {
     b.addEventListener('click', async () => {
       const text = document.getElementById(b.dataset.copy ?? '')?.textContent ?? ''

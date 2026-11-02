@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>DiodeCam · Licenses</title>
+    <link rel="icon" href="./icon.svg?v=__V__" type="image/svg+xml" />
+    <link rel="stylesheet" href="./style.css?v=__V__" />
+    <script>
+      try {
+        const t = localStorage.getItem('diodecam.theme')
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t
+      } catch {}
+    </script>
+  </head>
+  <body class="doc">
+    <main class="doc">
+      <p class="crumbs"><a href="./">DiodeCam</a> · Licenses</p>
+      <h1>Licenses and notices</h1>
+      <p class="lede">DiodeCam is open source under the Apache License 2.0. The receiver page loads no third-party scripts, styles or fonts; its WebAssembly module and the sender binary bundle the Rust crates below.</p>
+
+      <h2>DiodeCam</h2>
+      <p>Copyright © 2026 the DiodeCam authors. Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>. Source: <a href="https://github.com/cagojeiger/diodecam">github.com/cagojeiger/diodecam</a>.</p>
+
+      <h2>Receiver page</h2>
+      <p>Plain HTML, CSS and JavaScript plus the DiodeCam WebAssembly module, built from <code>raptorq</code>, <code>reed-solomon</code>, <code>crc</code>, <code>sha2</code> and <code>flate2</code> and their dependencies (listed below). No external scripts, styles or fonts are loaded. The gray palette is taken from the <a href="https://github.com/tailwindlabs/tailwindcss">Tailwind CSS</a> neutral scale (MIT).</p>
+
+      <h2>Sender binary (Rust crates)</h2>
+      <p>Statically linked into <code>diodecam</code>. Each crate's license text is in its source repository on <a href="https://crates.io">crates.io</a>.</p>
+      <table class="licenses">
+        <thead><tr><th>Crate</th><th>License</th></tr></thead>
+        <tbody>
+          <tr><td>raptorq</td><td>Apache-2.0</td></tr>
+          <tr><td>reed-solomon</td><td>MIT</td></tr>
+          <tr><td>crossterm</td><td>MIT</td></tr>
+          <tr><td>signal-hook, signal-hook-registry</td><td>MIT OR Apache-2.0</td></tr>
+          <tr><td>sha2, digest, block-buffer, crypto-common, typenum, cpufeatures</td><td>MIT OR Apache-2.0</td></tr>
+          <tr><td>generic-array</td><td>MIT</td></tr>
+          <tr><td>crc, crc-catalog, crc32fast</td><td>MIT OR Apache-2.0</td></tr>
+          <tr><td>flate2, miniz_oxide, adler2, simd-adler32</td><td>MIT OR Apache-2.0 (simd-adler32: MIT; miniz_oxide also Zlib; adler2 also 0BSD)</td></tr>
+          <tr><td>parking_lot, parking_lot_core, lock_api, scopeguard, smallvec, bitflags, cfg-if, libc, errno</td><td>MIT OR Apache-2.0</td></tr>
+          <tr><td>rustix, linux-raw-sys (Linux builds)</td><td>Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">From <code>cargo tree -p diodecam-cli</code> for the macOS and Linux (musl) targets at v0.3.0. When a crate is dual-licensed, DiodeCam uses it under Apache-2.0 where offered, else MIT. The full license texts ship with each release archive from v0.4.0.</p>
+
+      <p class="muted">Last reviewed 2026-11-02 · <a href="./privacy.html">Privacy</a> · <a href="./terms.html">Terms</a></p>
+    </main>
+  </body>
+</html>

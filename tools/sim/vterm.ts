@@ -134,6 +134,11 @@ export class VTerm {
     }
   }
 
+  /** One row as text, for drawing the status lines. */
+  line(row: number): string {
+    return this.cells.slice(row * this.cols, (row + 1) * this.cols).map((c) => c.ch).join('')
+  }
+
   rasterize(opts: RasterOptions = {}): GrayImage {
     const cw = opts.cellWidth ?? 8
     const chh = opts.cellHeight ?? 16
