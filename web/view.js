@@ -57,7 +57,11 @@ export function view(v) {
   const offer = v.offer
   const need = s?.symbols.need ?? null
   const have = s?.symbols.have ?? 0
-  const fraction = need ? Math.min(1, have / need) : 0
+  // `need` is an estimate (K + 2·Z) and RaptorQ may want a few more: until the file is decoded
+  // the bar stops at 99 %, and a count or time to go past it would read 0.
+  const pastNeed = need !== null && have >= need && !s?.done
+  const left = pastNeed ? null : v.left
+  const fraction = need ? Math.min(s?.done ? 1 : 0.99, have / need) : 0
   const percent = `${Math.floor(fraction * 100)}%`
   const count = `${thousands(have)} / ${need === null ? '?' : thousands(need)}`
   const error = v.notice?.tone === 'bad' || v.fatal !== ''
@@ -74,7 +78,7 @@ export function view(v) {
   } else if (receiving) {
     const read = v.rate === null ? '' : `${Math.round(v.rate * 100)}% read`
     const resumed = v.resumed > 0 ? ` · ${thousands(v.resumed)} resumed` : ''
-    strip = { state: 'receiving', label: '● Receiving', symbols: count, extra: `${read}${resumed}`, right: v.left === null ? percent : `${formatSeconds(v.left)} left` }
+    strip = { state: 'receiving', label: '● Receiving', symbols: count, extra: `${read}${resumed}`, right: left === null ? percent : `${formatSeconds(left)} left` }
   } else {
     const label = v.scanning ? '○ Looking' : s?.meta ? '○ Paused' : '○ Idle'
     strip = { state: 'idle', label, symbols: s?.meta ? count : '', extra: '', right: percent }
@@ -117,7 +121,7 @@ export function view(v) {
         : 'Start the camera and frame the whole sender screen'
     status = { text, tone: '' }
   } else if (!s?.meta) status = { text: v.gridSeen ? 'Grid found. Waiting for the file header…' : 'Frame the whole sender screen', tone: '' }
-  else status = { text: `${thousands(Math.max(0, (need ?? 0) - have))} pieces to go${v.left === null ? '' : ` · about ${formatSeconds(v.left)}`}`, tone: '' }
+  else status = { text: `${pastNeed ? 'A few more pieces to go' : `${thousands(Math.max(0, (need ?? 0) - have))} pieces to go`}${left === null ? '' : ` · about ${formatSeconds(left)}`}`, tone: '' }
 
   return { strip, status, hint: line, buttons, fraction: done ? 1 : fraction, complete: done, ring: receiving, tick: done, prompt: !done }
 }

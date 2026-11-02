@@ -193,6 +193,21 @@ describe('view', () => {
     assert.equal(view(state({ offer: offer(), stats: stats(50, 100) })).fraction, 1, 'a kept file fills the bar')
   })
 
+  it('stops at 99 % until the file is decoded: RaptorQ may want more than K + 2·Z', () => {
+    for (const have of [1006, 1010]) {
+      const v = view(state({ scanning: true, stats: stats(have, 1006), rate: 0.9, left: 0 }))
+      assert.equal(v.fraction, 0.99, `${have}: fraction`)
+      assert.equal(v.strip.state, 'receiving')
+      assert.equal(v.strip.right, '99%', `${have}: no time left to show`)
+      assert.equal(v.status.text, 'A few more pieces to go', `${have}: status`)
+    }
+    assert.equal(view(state({ stats: stats(1006, 1006) })).strip.right, '99%', 'paused')
+    assert.equal(view(state({ scanning: true, stats: stats(1000, 1006), left: 1.5 })).status.text, '6 pieces to go · about 2 s')
+    // Decoded: full.
+    assert.equal(view(state({ scanning: true, stats: stats(1006, 1006, true) })).fraction, 1)
+    assert.equal(view(state({ scanning: true, stats: stats(1006, 1006, true) })).strip.right, '100%')
+  })
+
   // A snapshot as main.js builds it, holding what must never be copied: the decoder's answer names
   // the file, and the camera settings carry device ids.
   const secret = { name: 'quarterly-secret-report.pdf', size: 987_654_321, id: 'c0ffee42', content: new TextEncoder().encode('TOP-SECRET-CONTENT') }
