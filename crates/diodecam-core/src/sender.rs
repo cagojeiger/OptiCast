@@ -264,7 +264,7 @@ impl Transfer {
 
     /// Tiles for the next frame of a layout with `tiles` positions (unencoded).
     pub fn next_frame_tiles(&mut self, tiles: usize) -> Vec<Tile> {
-        debug_assert!(tiles > 0, "a layout has at least 2 tile positions");
+        debug_assert!(tiles >= 2, "a layout has at least 2 tile positions");
         let f = self.frames;
         self.frames += 1;
         let meta = Tile::meta(self.tag, self.meta_bytes);

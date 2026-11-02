@@ -1,6 +1,6 @@
 //! Terminal encoding (spec §1.1, §1.2) and its inverse.
 //!
-//! [`frame`] turns a module grid into the exact bytes the sender writes.
+//! [`frame()`] turns a module grid into the exact bytes the sender writes.
 //! [`Screen`] / [`parse_screen`] read terminal output — raw sender bytes or
 //! `tmux capture-pane -p -e` text — back into a module grid. The parser knows
 //! CUP, CUU/CUD/CUF/CUB, CHA, VPA, SGR 0/7/27, ED/EL and the controls LF, CR, BS
@@ -58,7 +58,7 @@ pub fn frame(grid: &ModuleGrid, profile: Profile, cols: usize, rows: usize, stat
 }
 
 /// A frame without a grid (e.g. "terminal too small"): `lines` from the top,
-/// plus the status lines. Same framing as [`frame`].
+/// plus the status lines. Same framing as [`frame()`].
 pub fn message_frame(lines: &[&str], cols: usize, rows: usize, status: [&str; 2], clear: bool) -> String {
     let mut out = String::new();
     if clear {
