@@ -187,6 +187,17 @@ export function limitMib(param) {
 }
 
 /**
+ * `?cap=`: the width asked of the camera (ideal, 16:9). 1920 unless given; a phone that
+ * can do 3840 doubles the pixels per module at the cost of about four times the decode work.
+ * @param {string | null} param
+ */
+export function captureWidth(param) {
+  const n = Math.floor(Number(param))
+  if (param === null || param.trim() === '' || !Number.isFinite(n)) return 1920
+  return Math.min(3840, Math.max(640, n))
+}
+
+/**
  * `?scan=` width: an integer clamped to [64, video width]; min(video width, 1920) when absent or not a number.
  * @param {string | null} param
  * @param {number} videoWidth
