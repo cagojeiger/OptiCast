@@ -48,7 +48,7 @@ pnpm e2e --headed --hold 20            # 보이는 Chrome 으로 시연
 ## 배포와 릴리스
 
 - `.github/workflows/ci.yml`: PR과 `main`에서 rustfmt, clippy, cargo test, typecheck, WASM 빌드, JS 테스트. `main`이면 통과한
-  WASM과 `web/`을 복사하고 `__V__`를 커밋 해시로 바꿔 GitHub Pages에 배포한다. 테스트가 깨진 커밋은 배포되지 않고,
+  WASM과 `web/`을 복사하고 `__V__`를 커밋 해시로, `__VERSION__`을 `Cargo.toml`의 버전으로 바꿔 GitHub Pages에 배포한다. 테스트가 깨진 커밋은 배포되지 않고,
   같은 브랜치의 실행은 push 순서대로 하나씩 돈다(옛 실행을 다시 돌리면 그 커밋이 다시 배포된다).
   커밋 해시가 오프라인 캐시 이름이 되므로 새 배포는 다음 온라인 접속에서 옛 캐시를 대체한다.
 - `v*` 태그 → `.github/workflows/release.yml`: `diodecam-<target>.tar.gz`(+ sha256) 4종을 릴리스에 올린다.

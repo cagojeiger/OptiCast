@@ -128,6 +128,8 @@ describe('page', () => {
     assert.equal((html.match(/class="step"/g) ?? []).length, 4)
     assert.equal((html.match(/class="setup-foot"/g) ?? []).length, 1)
     assert.ok(!html.includes('send report.pdf'), 'commands use <FILE>, not a sample name')
+    assert.ok(html.includes('<span>v__VERSION__</span>'), 'the footer version is injected from Cargo.toml by the deploy')
+    assert.ok(!/\bv\d+\.\d+\.\d+\b/.test(html), 'no hand-written version in the page')
   })
   it('quotes the file argument the way the shell needs', async () => {
     // setup.js is a browser module; the rule is small enough to mirror here and keep in sync.
