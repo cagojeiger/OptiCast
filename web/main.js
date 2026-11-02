@@ -812,7 +812,7 @@ async function saveProgress(id, tiles, count) {
   try {
     // Never replace a saved entry with a smaller one (an export made while saved tiles were being re-imported).
     const stored = await store.info(id)
-    if (gen !== resetGen || (stored && stored.tiles > count)) return
+    if (gen !== resetGen || !store.shouldSave(stored, count)) return
     await store.save({ id, name: meta.name, size: meta.size, savedAt: Date.now(), data: tiles })
   } catch (err) {
     console.warn('saving progress failed', err)

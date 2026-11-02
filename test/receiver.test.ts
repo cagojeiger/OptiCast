@@ -5,14 +5,14 @@
 
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, it } from 'node:test'
 import { cameraView, framing, toRgba } from '../tools/sim/camera.ts'
 import { VTerm } from '../tools/sim/vterm.ts'
 import { MIN_MODULE_PX, captureWidth, eta, failure, formatBytes, fps, hint, limitMib, moduleSize, quantile, recognition, safeName, scanWidth, symbolRate, tooLargeText, trim, type FrameSample, type Stage } from '../web/metrics.js'
-import { evictable, exportTiles, type SavedMeta } from '../web/store.js'
+import { evictable, exportTiles, keepable, shouldSave, type KeptFile, type SavedMeta } from '../web/store.js'
 import { OUT_OF_MEMORY, WasmReceiver } from '../web/wasm.js'
 import { randomBytes } from './helpers.ts'
 
@@ -152,6 +152,61 @@ describe('page', () => {
     assert.ok(head.includes("dataset.view ="), 'data-view is set in the head')
     assert.ok(head.includes("get('receiver') === '1'"), '?receiver=1 forces the receiver')
   })
+  it('has every element the scripts look up by id', () => {
+    const ids = new Set([...html.matchAll(/(?<![\w-])id="([^"]+)"/g)].map((m) => m[1]))
+    // main.js wraps getElementById as `$('x')`, setup.js as `set('x', …)`.
+    const lookups = ['main.js', 'setup.js'].flatMap((f) =>
+      [...readFileSync(resolve('web', f), 'utf8').matchAll(/(?:getElementById|(?<![\w.])\$|(?<![\w.])set)\('([^']+)'/g)].map((m) => m[1] ?? ''),
+    )
+    for (const known of ['preview', 'cmd-run', 'theme-btn']) assert.ok(lookups.includes(known), `the pattern finds ${known}`)
+    // The copy buttons look up their data-copy target.
+    const copies = [...html.matchAll(/data-copy="([^"]+)"/g)].map((m) => m[1] ?? '')
+    for (const id of [...lookups, ...copies]) assert.ok(ids.has(id), `#${id} is looked up but not in index.html`)
+  })
+  it('caches only files that exist for the offline copy', () => {
+    const sw = readFileSync(resolve('web/sw.js'), 'utf8')
+    const list = sw.slice(sw.indexOf('const FILES = ['), sw.indexOf('].map('))
+    const files = [...list.matchAll(/'([^']+)'/g)].map((m) => m[1] ?? '')
+    assert.ok(files.includes('main.js') && files.includes('diodecam.wasm'), 'the FILES list is found')
+    for (const f of files) {
+      if (f === 'diodecam.wasm' && !existsSync(resolve('web', f))) continue // built by `pnpm wasm`
+      assert.ok(existsSync(resolve('web', f)), `sw.js caches ${f}, which is not in web/`)
+    }
+    // And the other way: every versioned reference in the page files is cached.
+    const referenced = new Set<string>()
+    for (const f of readdirSync(resolve('web')).filter((f) => /\.(html|js|css|webmanifest)$/.test(f)))
+      for (const m of readFileSync(resolve('web', f), 'utf8').matchAll(/\.\/([\w.-]+)\?v=__V__/g)) referenced.add(m[1] ?? '')
+    for (const f of referenced) assert.ok(files.includes(f), `${f} is referenced with ?v= but sw.js does not cache it`)
+  })
+  it('redefines every colour token for dark mode, the same way in both dark blocks', () => {
+    const css = readFileSync(resolve('web/style.css'), 'utf8')
+    const tokens = (selector: string) => {
+      const start = css.indexOf(`${selector} {`)
+      assert.ok(start >= 0, `${selector} is in style.css`)
+      const body = css.slice(start, css.indexOf('}', start))
+      return new Map([...body.matchAll(/(--[\w-]+):\s*([^;]+);/g)].map((m): [string, string] => [m[1] ?? '', (m[2] ?? '').trim()]))
+    }
+    const light = tokens(':root')
+    const system = tokens(":root:not([data-theme='light'])")
+    const chosen = tokens(":root[data-theme='dark']")
+    assert.deepEqual(chosen, system, 'a chosen dark theme is the system dark theme')
+    for (const t of system.keys()) assert.ok(light.has(t), `${t} is defined for dark mode only`)
+    // Not tied to a mode: the one signal hue, the always-dark camera box, a length.
+    const shared = [...light.keys()].filter((t) => !system.has(t)).sort()
+    assert.deepEqual(shared, ['--camera', '--gutter', '--signal'], 'a new light token needs a dark value')
+  })
+  it('the doc pages share one theme script, keyed like the setup page', () => {
+    const key = /THEME_KEY = '([^']+)'/.exec(readFileSync(resolve('web/setup.js'), 'utf8'))?.[1]
+    assert.ok(key, 'THEME_KEY is in setup.js')
+    const scripts = ['help', 'privacy', 'terms', 'licenses'].map((p) => {
+      const page = readFileSync(resolve(`web/${p}.html`), 'utf8')
+      assert.ok(page.includes('<script>'), `${p}.html has its theme script`)
+      return page.slice(page.indexOf('<script>'), page.indexOf('</script>'))
+    })
+    for (const s of scripts) assert.equal(s, scripts[0])
+    assert.ok(scripts[0]?.includes(`localStorage.getItem('${key}')`), 'the doc pages read the key setup.js writes')
+    assert.ok(html.includes(`localStorage.getItem('${key}')`), 'so does index.html')
+  })
 })
 
 describe('URL options', () => {
@@ -209,6 +264,26 @@ describe('resume store', () => {
     assert.deepEqual(evictable([e('new', 0, 100), e('mid', 1, 20), e('old', 2, 20)], now, null), ['old'])
     // The entry being saved is never evicted, but counts towards the budget.
     assert.deepEqual(evictable([e('keep', 9, 120), e('x', 0, 20)], now, 'keep'), ['x'])
+  })
+
+  it('never replaces a saved entry with one of fewer tiles', () => {
+    const saved: SavedMeta = { id: 'a', name: 'a', size: 1, savedAt: 0, tiles: 50, bytes: 8 + 50 * 108 }
+    assert.equal(shouldSave(undefined, 1), true)
+    assert.equal(shouldSave(saved, 49), false)
+    assert.equal(shouldSave(saved, 50), true, 'the same count is saved again (fresh savedAt)')
+    assert.equal(shouldSave(saved, 51), true)
+  })
+
+  it('offers the received file for 24 hours at most (the privacy.html promise)', () => {
+    const day = 24 * 3600 * 1000
+    const now = 100 * day
+    const kept = (ageMs: number, blob: unknown = new Blob(['x'])) => ({ id: 'a', name: 'a', size: 1, receivedAt: now - ageMs, blob }) as KeptFile
+    assert.equal(keepable(kept(0), now), true)
+    assert.equal(keepable(kept(day), now), true)
+    assert.equal(keepable(kept(day + 1), now), false)
+    assert.equal(keepable(kept(0, null), now), false, 'its stored bytes are gone')
+    assert.equal(keepable(kept(0, {}), now), false)
+    assert.equal(keepable(undefined, now), false)
   })
 })
 

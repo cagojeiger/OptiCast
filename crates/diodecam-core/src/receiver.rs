@@ -643,6 +643,85 @@ mod tests {
         assert_eq!(rx.finalize(), Ok(Vec::new()));
     }
 
+    /// META repeats on screen all the time: a repeat leaves the decode alone.
+    #[test]
+    fn repeated_meta_keeps_the_decode() {
+        let data: Vec<u8> = (0..3000u32).map(|i| (i * 11 + i / 5) as u8).collect();
+        let mut tx = Transfer::prepare(&data, "a", SendOptions { compress: false }, 0).unwrap();
+        let tiles = tiles_of(&mut tx, 10);
+        let meta = tiles.iter().find(|t| t.kind == TileKind::Meta).unwrap().clone();
+        let symbols: Vec<&Tile> = tiles.iter().filter(|t| t.kind == TileKind::Data).collect();
+        let mut rx = Assembler::new();
+        assert_eq!(rx.accept(&meta), Accepted::MetaConfirmed);
+        for t in &symbols[..10] {
+            assert_eq!(rx.accept(t), Accepted::Symbol);
+        }
+        let before = rx.stats();
+        assert_eq!(before.symbols, 10);
+        for _ in 0..3 {
+            assert_eq!(rx.accept(&meta), Accepted::MetaRepeat);
+        }
+        assert_eq!(rx.stats(), before, "a repeat is not counted and does not restart the decoder");
+        assert_eq!(rx.transfer_id(), Some(tx.id()));
+        assert_eq!(rx.seen.len(), 10);
+        let mut i = 10;
+        while !rx.is_complete() {
+            rx.accept(symbols[i]);
+            i += 1;
+        }
+        assert_eq!(i as u64, tx.source_symbols(), "done on the last source symbol: the first ten still count");
+        assert_eq!(rx.accept(&meta), Accepted::MetaRepeat);
+        assert_eq!(rx.finalize(), Ok(data));
+        assert_eq!(rx.accept(&meta), Accepted::MetaRepeat, "also after the file was taken");
+    }
+
+    #[test]
+    fn data_before_meta_is_held_up_to_the_cap() {
+        let mut tx = Transfer::prepare(b"abc", "a", SendOptions::default(), 0).unwrap();
+        let meta = tx.next_frame_tiles(2)[0].clone();
+        assert_eq!(meta.kind, TileKind::Meta);
+        // DATA of another transfer, so the replay below only counts the tiles held.
+        let other = meta.tag ^ 1;
+        let mut rx = Assembler::new();
+        for esi in 0..MAX_PENDING as u32 + 10 {
+            assert_eq!(rx.accept(&Tile::data(other, 0, esi, [0; 96])), Accepted::Pending);
+        }
+        assert_eq!(rx.pending.len(), MAX_PENDING, "tiles past the cap are answered Pending but dropped");
+        assert_eq!(rx.pending.last().map(|t| t.esi), Some(MAX_PENDING as u32 - 1), "the first ones are kept");
+        assert_eq!(rx.stats(), Stats::default());
+        assert_eq!(rx.accept(&meta), Accepted::MetaConfirmed);
+        assert_eq!(rx.stats().other_transfer, MAX_PENDING as u64);
+        assert!(rx.pending.is_empty());
+    }
+
+    #[test]
+    fn sbn_outside_the_oti_is_invalid() {
+        let data: Vec<u8> = (0..3000u32).map(|i| (i * 7) as u8).collect();
+        let mut tx = Transfer::prepare(&data, "a", SendOptions { compress: false }, 0).unwrap();
+        assert_eq!(tx.source_blocks(), 1);
+        let tiles = tiles_of(&mut tx, 10);
+        let meta = tiles.iter().find(|t| t.kind == TileKind::Meta).unwrap();
+        let first = tiles.iter().find(|t| t.kind == TileKind::Data).unwrap();
+        let mut rx = Assembler::new();
+        assert_eq!(rx.accept(meta), Accepted::MetaConfirmed);
+        assert_eq!(rx.accept(first), Accepted::Symbol);
+        let before = rx.stats();
+        for sbn in [1, 2, 255] {
+            // The same ESI and content as a real symbol, under a block the OTI does not have.
+            let forged = Tile { sbn, ..first.clone() };
+            assert_eq!(rx.accept(&forged), Accepted::Invalid);
+        }
+        assert_eq!(rx.stats(), Stats { invalid: before.invalid + 3, ..before });
+        assert_eq!(rx.seen.len(), 1, "nothing recorded for the forged blocks");
+        for t in tiles.iter().filter(|t| t.kind == TileKind::Data) {
+            rx.accept(t);
+            if rx.is_complete() {
+                break;
+            }
+        }
+        assert_eq!(rx.finalize(), Ok(data));
+    }
+
     #[test]
     fn replayed_tiles_complete_and_are_counted() {
         let data: Vec<u8> = (0..2000u32).map(|i| (i * 13) as u8).collect();
