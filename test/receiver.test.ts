@@ -133,7 +133,7 @@ describe('URL options', () => {
   })
 
   it('names sizes in the too-large message', () => {
-    assert.equal(tooLargeText(1_377_000_000, 64 * 2 ** 20), '파일이 너무 큽니다: 1,313 MiB > 한도 64 MiB (?max= 로 바꿀 수 있습니다)')
+    assert.equal(tooLargeText(1_377_000_000, 64 * 2 ** 20), 'File too large: 1,313 MiB > limit 64 MiB (change it with ?max=)')
   })
 })
 

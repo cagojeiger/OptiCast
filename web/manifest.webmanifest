@@ -1,8 +1,8 @@
 {
-  "name": "DiodeCam 수신기",
+  "name": "DiodeCam Receiver",
   "short_name": "DiodeCam",
-  "description": "터미널 화면을 카메라로 비춰 파일을 받습니다. 아무것도 업로드하지 않습니다.",
-  "lang": "ko",
+  "description": "Point the camera at a terminal to receive a file. Nothing is uploaded.",
+  "lang": "en",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

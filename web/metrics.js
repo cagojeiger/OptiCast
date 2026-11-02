@@ -147,21 +147,21 @@ export function hint(frames, portrait = false) {
 
 /** @type {Record<Hint, string>} */
 export const HINT_TEXT = {
-  faster: '송신 fps를 올려도 됩니다 (+)',
-  slower: '송신 fps를 낮추세요(-)',
-  aim: '화면 전체가 들어오게 비추세요 (네 모서리 표식)',
-  focus: '격자가 흐립니다 — 흔들리지 않게, 초점이 맞는 거리에서',
-  straight: '격자가 휘어 보입니다 — 정면에서 조금 떨어져 비추세요',
-  closer: '격자 칸이 작습니다 — 더 가까이 비추거나 터미널 글꼴을 키우세요',
-  rotate: '폰을 가로로 들면 격자 칸이 두 배 가까이 크게 찍힙니다',
+  faster: 'You can raise the sender fps (+)',
+  slower: 'Lower the sender fps (-)',
+  aim: 'Frame the whole screen, all four corner marks',
+  focus: 'The grid is blurred: hold still, at a distance that focuses',
+  straight: 'The grid looks bent: face the screen, a little further back',
+  closer: 'The grid cells are small: move closer or enlarge the terminal font',
+  rotate: 'Hold the phone sideways for a larger grid',
 }
 
 /** @type {Record<Exclude<Stage, 'done'>, string>} */
 export const STAGE_TEXT = {
-  finders: '표식',
-  timing: '타이밍 줄',
-  format: '형식 정보',
-  geometry: '기하(왜곡)',
+  finders: 'finder marks',
+  timing: 'timing lines',
+  format: 'format info',
+  geometry: 'geometry',
 }
 
 /**
@@ -198,14 +198,14 @@ export function scanWidth(param, videoWidth) {
 }
 
 /**
- * "파일이 너무 큽니다: N MiB > 한도 M MiB".
+ * "File too large: N MiB > limit M MiB".
  * @param {number} size
  * @param {number} limit
  */
 export function tooLargeText(size, limit) {
   /** @param {number} n */
   const mib = (n) => (n / 2 ** 20).toLocaleString('en-US', { maximumFractionDigits: n < 10 * 2 ** 20 ? 1 : 0 })
-  return `파일이 너무 큽니다: ${mib(size)} MiB > 한도 ${mib(limit)} MiB (?max= 로 바꿀 수 있습니다)`
+  return `File too large: ${mib(size)} MiB > limit ${mib(limit)} MiB (change it with ?max=)`
 }
 
 /**
@@ -221,11 +221,11 @@ export function formatBytes(n) {
 
 /** @param {number} s */
 export function formatSeconds(s) {
-  if (s < 1) return '1초 미만'
-  if (s < 60) return `${Math.ceil(s)}초`
+  if (s < 1) return 'under 1 s'
+  if (s < 60) return `${Math.ceil(s)} s`
   const m = Math.floor(s / 60)
   const r = Math.ceil(s % 60)
-  return m < 60 ? `${m}분 ${r}초` : `${Math.floor(m / 60)}시간 ${m % 60}분`
+  return m < 60 ? `${m} min ${r} s` : `${Math.floor(m / 60)} h ${m % 60} min`
 }
 
 /** @param {number} n */

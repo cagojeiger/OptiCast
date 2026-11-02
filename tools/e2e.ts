@@ -197,6 +197,7 @@ try {
   page.on('pageerror', (err) => pageError(`page error: ${err.message}`))
   page.on('console', (msg) => msg.type() === 'error' && pageError(`console: ${msg.text()}`))
   await page.goto(`${url}?debug=1${args.scan ? `&scan=${args.scan}` : ''}`)
+  // Stats live in a sheet; its text is readable without opening it.
   await page.getByTestId('start').click()
   const startedAt = Date.now()
   const samples: { recognition: number; ms: number }[] = []
@@ -219,12 +220,12 @@ try {
       const before = await page.getByTestId('symbols').textContent()
       await page.reload()
       await page.getByTestId('start').click()
-      await page.getByText('이어 받기').waitFor({ timeout: 15_000 })
-      const status = await page.getByTestId('status').textContent()
+      await page.getByTestId('strip-extra').getByText('resumed').waitFor({ timeout: 15_000 })
+      const status = await page.getByTestId('strip').textContent()
       console.log(`reload   before: ${before}; after reload: ${status}`)
       result.resumed = status
     }
-    await page.getByTestId('download').waitFor({ state: 'visible', timeout: Number(args.timeout) * 1000 })
+    await page.locator('#download:enabled').waitFor({ timeout: Number(args.timeout) * 1000 })
   } finally {
     clearInterval(ticker)
   }
@@ -237,7 +238,7 @@ try {
   const identical = received.length === original.length && Buffer.from(received).equals(Buffer.from(original))
   // The verified file stays until the next one or a reset: a reload offers it again.
   await page.reload()
-  const kept = await page.getByTestId('result').getByText('에 받음').waitFor({ timeout: 10_000 }).then(() => true, () => false)
+  const kept = await page.getByTestId('strip').getByText('Received').waitFor({ timeout: 10_000 }).then(() => true, () => false)
   console.log(`reload   kept file offered again: ${kept}`)
   const ok = identical && kept && errors === 0
   const overall = stats.totals?.tiles ? stats.totals.tiles_ok / stats.totals.tiles : 0
@@ -256,7 +257,7 @@ try {
     detections: stats.totals?.detections,
     symbols: stats.symbols,
   })
-  console.log(`result   ${(await page.locator('#result-text').textContent())?.trim()}`)
+  console.log(`result   ${(await page.getByTestId('strip').textContent())?.replace(/\s+/g, ' ').trim()} · ${(await page.getByTestId('file-name').textContent())?.trim()}`)
   console.log(
     `${ok ? 'PASS' : 'FAIL'}     ${label}: ${download.suggestedFilename()} ${received.length} B in ${seconds.toFixed(1)} s ` +
       `(${(seconds / duration).toFixed(2)} clip loops), tile recognition ${(overall * 100).toFixed(1)}% over ` +
