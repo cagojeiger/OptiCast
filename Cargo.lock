@@ -95,7 +95,7 @@ dependencies = [
 
 [[package]]
 name = "diodecam-cli"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "crossterm",
  "diodecam-core",
@@ -104,7 +104,7 @@ dependencies = [
 
 [[package]]
 name = "diodecam-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "crc",
  "flate2",
@@ -115,14 +115,14 @@ dependencies = [
 
 [[package]]
 name = "diodecam-sim"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "diodecam-core",
 ]
 
 [[package]]
 name = "diodecam-vision"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "diodecam-core",
  "diodecam-sim",
@@ -130,7 +130,7 @@ dependencies = [
 
 [[package]]
 name = "diodecam-wasm"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "diodecam-core",
  "diodecam-vision",

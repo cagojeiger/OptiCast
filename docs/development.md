@@ -34,6 +34,7 @@ node tools/icons.ts                    # web/icon.svg 와 icon-*.png 다시 만�
 node tools/qr.ts                       # web/qr.svg (수신기 주소 QR, 데스크톱 설정 페이지용) 다시 만들기
 node tools/terminal-example.ts         # web/example-terminal.svg (설정 페이지의 송신 화면 예시, 실제 프레임) 다시 만들기
 node tools/floor.ts [cols] [rows]      # 디코더 바닥: 모듈 px × 블러별 타일 인식률 (vision 변경 전후 비교 기준선, 송신기와 wasm을 먼저 빌드)
+node tools/third-party-licenses.ts     # THIRD_PARTY_LICENSES.md: 송신기에 링크되는 크레이트의 라이선스 전문 (Cargo.lock이 바뀌면 다시 만든다)
 ```
 
 rustup 기본 툴체인이 x86_64인 Mac에서는 cargo 앞에 `RUSTUP_TOOLCHAIN=stable-aarch64-apple-darwin
@@ -60,6 +61,6 @@ pnpm e2e --headed --hold 20            # 보이는 Chrome 으로 시연
   같은 브랜치에서는 실행이 한 번에 하나만 돈다. 새 push는 도는 실행을 기다리지만 기다리는 실행은 하나만 남으므로,
   그 사이에 더 새 push가 오면 기다리던 실행은 취소되고 가장 새 커밋만 배포된다(옛 실행을 다시 돌리면 그 커밋이 다시 배포된다).
   커밋 해시가 오프라인 캐시 이름이 되므로 새 배포는 다음 온라인 접속에서 옛 캐시를 대체한다.
-- `v*` 태그 → `.github/workflows/release.yml`: 태그 커밋이 테스트(cargo test, typecheck, WASM 빌드와 JS 테스트)를 통과하면 `diodecam-<target>.tar.gz`(+ sha256) 4종을 릴리스에 올린다.
+- `v*` 태그 → `.github/workflows/release.yml`: 태그 커밋이 테스트(cargo test, typecheck, WASM 빌드와 JS 테스트)를 통과하면 `diodecam-<target>.tar.gz`(+ sha256) 4종을 릴리스에 올린다. 아카이브에는 바이너리, LICENSE, THIRD_PARTY_LICENSES.md, README가 들어간다.
   파일 이름에 버전이 없으므로 `releases/latest/download/…` 주소가 고정이다.
 - PR은 squash 머지하고, 커밋 제목은 `type(scope): 설명 (#N)`이다.
