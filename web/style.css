@@ -672,34 +672,30 @@ html[data-view='receiver'] #setup {
   display: none;
 }
 
-/* --- desktop setup page --------------------------------------------------------------- */
+/* --- desktop setup page: one screen, two columns, one fold ------------------------------ */
 
 .setup {
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  font-size: 15px;
-  line-height: 1.5;
-}
-
-.setup > * {
-  width: 100%;
+  height: 100dvh;
+  box-sizing: border-box;
+  padding: 28px 32px 16px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: 16px;
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 32px;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .setup-head {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px 16px;
-  padding-top: 40px;
-  padding-bottom: 28px;
+  gap: 6px 16px;
 }
 
 .setup-head h1 {
-  font-size: 26px;
+  font-size: 24px;
   flex-grow: 0;
 }
 
@@ -714,175 +710,56 @@ html[data-view='receiver'] #setup {
 }
 
 .setup-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
-  align-items: flex-start;
-  flex-grow: 1;
-}
-
-.setup-grid {
-  padding-top: 20px;
-  padding-bottom: 20px;
-}
-
-.setup-grid > .card {
-  flex: 1 1 320px;
-  min-width: 0;
-}
-
-.setup > .card.wide,
-.setup > .fold.wide {
-  max-width: calc(1200px - 64px);
-  margin-left: auto;
-  margin-right: auto;
-  width: calc(100% - 64px);
-  padding: 24px;
-}
-
-.setup > .fold.wide {
-  padding: 0 16px;
-}
-
-.file-field {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 14px;
-  color: var(--text-2);
-}
-
-.file-field input {
-  flex: 1 1 240px;
-  max-width: 420px;
-  min-height: 44px;
-  padding: 0 12px;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  background: var(--bg);
-  color: var(--text);
-  font: inherit;
-  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-  font-size: 13px;
-}
-
-.file-field input:focus-visible {
-  outline: 2px solid var(--text);
-  outline-offset: 2px;
-}
-
-.fold h3 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.fold {
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--bg);
-  padding: 0 16px;
-}
-
-.fold summary {
-  cursor: pointer;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.fold[open] summary {
-  border-bottom: 1px solid var(--line);
-}
-
-.fold > :not(summary) {
-  margin: 12px 0;
-}
-
-
-.sheet .code {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 10px 10px 10px 14px;
-}
-
-.sheet .code pre {
-  margin: 0;
-  flex-grow: 1;
-  min-width: 0;
-  overflow-x: auto;
-  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-  font-size: 12px;
-  line-height: 1.7;
-}
-
-.sheet .code .copy {
-  flex-shrink: 0;
-  font-size: 13px;
-  font-weight: 400;
-  border-radius: 8px;
-}
-
-.sheet code {
-  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-  font-size: 12px;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 16px;
+  align-items: start;
 }
 
 .setup .card {
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--panel);
-  padding: 24px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
+  min-width: 0;
 }
 
 .setup h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 600;
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
+.card.phone h2 + h2 {
+  margin-top: 6px;
+}
+
 .step {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: var(--invert-bg);
   color: var(--invert-text);
-  font-size: 14px;
+  font-size: 13px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
-
-.setup h3 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 
 .setup p {
   margin: 0;
   color: var(--text-2);
-  font-size: 14px;
 }
 
-.setup p.muted,
-.setup a.muted {
+.setup p.muted {
   color: var(--muted);
   font-size: 13px;
 }
@@ -902,8 +779,10 @@ html[data-view='receiver'] #setup {
   background: transparent;
   border-color: var(--line);
   font-weight: 400;
-  font-size: 14px;
-  padding: 0 16px;
+  font-size: 13px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 8px;
 }
 
 .targets button[aria-pressed='true'] {
@@ -913,10 +792,31 @@ html[data-view='receiver'] #setup {
   font-weight: 600;
 }
 
+.file-field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-2);
+}
 
+.file-field input {
+  flex: 1 1 240px;
+  max-width: 420px;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 13px;
+}
 
-
-
+.file-field input:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
 
 .code {
   display: flex;
@@ -943,36 +843,80 @@ html[data-view='receiver'] #setup {
   font-size: 13px;
   font-weight: 400;
   border-radius: 8px;
+  min-height: 36px;
 }
 
 .qr {
   align-self: center;
-  width: 232px;
-  height: 232px;
+  width: 200px;
+  height: 200px;
   border-radius: 10px;
   border: 1px solid var(--line);
   background: #fff;
+}
+
+/* The fold stays one line closed; open, it scrolls inside its own box. */
+.fold {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.fold summary {
+  cursor: pointer;
+  min-height: 40px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.fold[open] summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.fold-body {
+  max-height: 34dvh;
+  overflow-y: auto;
+  padding: 12px 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.fold h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .setup-foot {
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
-  padding-top: 28px;
-  padding-bottom: 24px;
   font-size: 12px;
   color: var(--muted);
 }
 
-@media (max-width: 720px) {
-  .setup > * {
-    padding-left: 16px;
-    padding-right: 16px;
+/* Short or narrow windows: let the page scroll instead of squeezing. */
+@media (max-height: 640px), (max-width: 860px) {
+  .setup {
+    height: auto;
+    min-height: 100dvh;
   }
 
-  .setup > .card.wide,
-  .setup > .fold.wide {
-    width: calc(100% - 32px);
+  .setup-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fold-body {
+    max-height: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .setup {
+    padding: 20px 16px 16px;
   }
 }
 
