@@ -16,6 +16,8 @@ const PAGE = './'
 const FILES = [
   'style.css',
   'main.js',
+  'setup.js',
+  'qr.svg',
   'metrics.js',
   'store.js',
   'worker.js',

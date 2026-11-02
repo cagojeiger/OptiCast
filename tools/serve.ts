@@ -16,6 +16,7 @@ const TYPES: Record<string, string> = {
   '.wasm': 'application/wasm',
   '.webmanifest': 'application/manifest+json',
   '.png': 'image/png',
+  '.svg': 'image/svg+xml',
 }
 
 /** Serves `dir` on 127.0.0.1:`port` (0: any free port); resolves once listening. */

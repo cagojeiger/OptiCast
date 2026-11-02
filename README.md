@@ -5,7 +5,7 @@ SSH 터미널에 그린 흑백 격자를 폰 카메라로 찍어 파일을 옮�
 
 ## 사용법
 
-1. 폰 Safari에서 **https://cagojeiger.github.io/diodecam/** 를 열고 [Start]. 공유 → 홈 화면에 추가하면 앱처럼 열리고
+1. PC에서 **https://cagojeiger.github.io/diodecam/** 를 열면 설치 안내와 QR이 나온다. 폰으로 QR을 찍어 수신기를 열고 [Start]. 공유 → 홈 화면에 추가하면 앱처럼 열리고
    오프라인에서도 동작한다.
 2. 서버에서 보낸다(리눅스용은 정적 바이너리):
 
