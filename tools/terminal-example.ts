@@ -5,35 +5,21 @@
 //
 // usage: node tools/terminal-example.ts   (needs cargo; writes web/example-terminal.svg)
 
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { cargo } from './cargo.ts'
+import { writeFileSync } from 'node:fs'
+import { randomBytes, senderFrames } from './sim/sender.ts'
 import { VTerm } from './sim/vterm.ts'
-import { randomBytes } from '../test/helpers.ts'
 
 const COLS = 80
 const ROWS = 24
 const CELL_W = 8
 const CELL_H = 16
 
-const dir = mkdtempSync(join(tmpdir(), 'diodecam-example-'))
-let frame: { ansi: string }
-try {
-  const input = join(dir, 'report.pdf')
-  writeFileSync(input, randomBytes(24_000, 11))
-  const out = join(dir, 'frames.jsonl')
-  cargo(['run', '-q', '-p', 'diodecam-cli', '--', 'frames', input, '--cols', `${COLS}`, '--rows', `${ROWS}`, '--skip', '70', '--count', '1', '--out', out])
-  // JSON lines: a header object first, then one object per frame.
-  frame = JSON.parse(readFileSync(out, 'utf8').split('\n').filter((l) => l.trim())[1]!) as { ansi: string }
-} finally {
-  rmSync(dir, { recursive: true, force: true })
-}
+const [ansi] = senderFrames({ bytes: randomBytes(24_000, 11), name: 'report.pdf', cols: COLS, rows: ROWS, skip: 70, count: 1 }).frames
 
 // Replay the real ANSI bytes; then read the terminal back as pixels (one cell = 8×16,
 // `▀` lights the top half) and draw each half-cell as a rect.
 const term = new VTerm({ cols: COLS, rows: ROWS, defaultFg: 0xd4, defaultBg: 0x1e })
-term.write(frame.ansi)
+term.write(ansi!)
 const img = term.rasterize({ cellWidth: CELL_W, cellHeight: CELL_H, lineGap: 0 })
 const light = (x: number, y: number) => img.data[y * img.width + x]! > 0x80
 
