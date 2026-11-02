@@ -44,10 +44,12 @@ impl Candidate {
 
 /// Smallest big finder searched for: 7 modules of 2 px.
 const MIN_FINDER_PX: u32 = 14;
+/// Least gray-level difference between a big finder's centre and its gap ring.
+const MIN_CONTRAST: f64 = 12.0;
 
 /// Module size if the five runs (outer, gap, centre, gap, outer) fit 1:1:c:1:1
-/// within `tol` modules per unit.
-fn ratio(runs: &[u32; 5], center: f64, tol: f64) -> Option<f64> {
+/// within `tol` modules per unit, `outer` for the two outer runs.
+fn ratio(runs: &[u32; 5], center: f64, tol: f64, outer: f64) -> Option<f64> {
     let total: u32 = runs.iter().sum();
     let units = 4.0 + center;
     if (total as f64) < units {
@@ -55,7 +57,11 @@ fn ratio(runs: &[u32; 5], center: f64, tol: f64) -> Option<f64> {
     }
     let m = total as f64 / units;
     for (i, &r) in runs.iter().enumerate() {
-        let (expect, allowed) = if i == 2 { (center * m, center * tol * m) } else { (m, tol * m) };
+        let (expect, allowed) = match i {
+            2 => (center * m, center * tol * m),
+            0 | 4 => (m, outer * m),
+            _ => (m, tol * m),
+        };
         if (r as f64 - expect).abs() >= allowed {
             return None;
         }
@@ -133,14 +139,17 @@ fn cross_check(
     if c[3] == 0 || c[4] == 0 || get(k).is_none() {
         return None;
     }
-    let m = ratio(&c, 3.0, tol)?;
+    // The outer runs get twice the tolerance: their far side faces the separator
+    // and whatever lies beyond the grid, where blur and a local-mean threshold
+    // move the edge outwards (most at the grid's corners, on the diagonal).
+    let m = ratio(&c, 3.0, tol, 2.0 * tol)?;
     Some(((low + high) as f64 / 2.0, m))
 }
 
-/// Scans every `step`-th row of the bitmap for big finders and appends or merges
-/// confirmed ones into `out`.
+/// Scans every `step`-th row of the bitmap (made from `img`) for big finders and
+/// appends or merges confirmed ones into `out`.
 #[allow(clippy::needless_range_loop)] // x runs one past the row as an end sentinel
-pub fn scan(bm: &Bitmap, step: usize, out: &mut Vec<Candidate>) {
+pub fn scan(img: &GrayImage, bm: &Bitmap, step: usize, out: &mut Vec<Candidate>) {
     let r = bm.rect;
     let w = r.width();
     if w == 0 {
@@ -162,10 +171,10 @@ pub fn scan(bm: &Bitmap, step: usize, out: &mut Vec<Candidate>) {
             n += 1;
             // Below ~2 px per module the grid cannot be sampled anyway; skipping
             // those patterns also drops the many tiny ones that noise makes.
-            if n >= 5 && runs.iter().sum::<u32>() >= MIN_FINDER_PX && ratio(&runs, 3.0, 0.5).is_some() {
+            if n >= 5 && runs.iter().sum::<u32>() >= MIN_FINDER_PX && ratio(&runs, 3.0, 0.5, 0.5).is_some() {
                 let cx = (r.x0 + x) as f64 - runs[4] as f64 - runs[3] as f64 - runs[2] as f64 / 2.0;
                 let total: u32 = runs.iter().sum();
-                confirm(bm, cx, y, cur, total, out);
+                confirm(img, bm, cx, y, cur, total, out);
             }
             cur = v;
             len = 1;
@@ -173,15 +182,23 @@ pub fn scan(bm: &Bitmap, step: usize, out: &mut Vec<Candidate>) {
     }
 }
 
-fn confirm(bm: &Bitmap, cx: f64, y: usize, color: u8, total: u32, out: &mut Vec<Candidate>) {
+fn confirm(img: &GrayImage, bm: &Bitmap, cx: f64, y: usize, color: u8, total: u32, out: &mut Vec<Candidate>) {
     // Vertical extent may differ from horizontal: vt100 cells are twice as tall,
     // and the view may be rotated.
     let max_run = 2 * total;
     let col = cx.floor() as isize;
     let Some((dy, mv)) = cross_check(bm, (col, y as isize), (0, 1), color, max_run, 0.5) else { return };
     let cy = y as f64 + dy;
-    let row = cy.floor() as isize;
-    let Some((dx, mh)) = cross_check(bm, (col, row), (1, 0), color, max_run, 0.5) else { return };
+    // Every row of a mark checks the same centre row, so one row that blur or
+    // noise spoils would hide the mark: rows up to a third of a module away
+    // cross the centre square just as well.
+    let reach = (mv / 3.0) as isize;
+    let Some((row, (dx, mh))) = (0..=2 * reach)
+        .map(|k| cy.floor() as isize + if k % 2 == 1 { (k + 1) / 2 } else { -(k / 2) })
+        .find_map(|row| cross_check(bm, (col, row), (1, 0), color, max_run, 0.5).map(|r| (row, r)))
+    else {
+        return;
+    };
     let cx = col as f64 + dx;
     if !(0.25..=4.0).contains(&(mv / mh)) {
         return;
@@ -192,6 +209,17 @@ fn confirm(bm: &Bitmap, cx: f64, y: usize, color: u8, total: u32, out: &mut Vec<
         return;
     }
     let bright = color == 1;
+    // Noise in a flat surround lines such runs up now and then; a mark has real
+    // contrast between its centre and the gap ring two modules out.
+    let gap = [(2.0 * mh, 0.0), (-2.0 * mh, 0.0), (0.0, 2.0 * mv), (0.0, -2.0 * mv)]
+        .iter()
+        .map(|&(dx, dy)| img.bilinear(cx + dx, cy + dy))
+        .sum::<f64>()
+        / 4.0;
+    let contrast = img.bilinear(cx, cy) - gap;
+    if (if bright { contrast } else { -contrast }) < MIN_CONTRAST {
+        return;
+    }
     for c in out.iter_mut() {
         if c.bright == bright
             && (c.x - cx).abs() <= 1.5 * c.mh.max(mh)
@@ -326,22 +354,33 @@ pub fn find_small(img: &GrayImage, pred: Point, ju: Point, jv: Point, bright: bo
             }
         }
     }
-    let (s, mut c, fg, bg) = best;
+    let (s, peak, fg, bg) = best;
     // A real mark has strong contrast between its expected light and dark modules.
     if s < 0.35 * (fg - bg).abs().max(1.0) || s < 12.0 {
         return None;
     }
     let threshold = (fg + bg) / 2.0;
     // Refine: the six ring edges along each axis sit at ±0.5, ±1.5, ±2.5 modules.
-    for _ in 0..2 {
-        let du = refine_axis(img, c, ju, jv, threshold)?;
-        let dv = refine_axis(img, c, jv, ju, threshold)?;
-        c = c + ju * du + jv * dv;
-        if du.abs() < 0.02 && dv.abs() < 0.02 {
-            break;
+    let edges = || {
+        let mut c = peak;
+        for _ in 0..2 {
+            let du = refine_axis(img, c, ju, jv, threshold)?;
+            let dv = refine_axis(img, c, jv, ju, threshold)?;
+            c = c + ju * du + jv * dv;
+            if du.abs() < 0.02 && dv.abs() < 0.02 {
+                break;
+            }
         }
-    }
-    Some(c)
+        Some(c)
+    };
+    // Blur can merge the 1-module rings; the template peak stays centred (a
+    // symmetric mark under a symmetric blur), so search it in twelfths of a module.
+    let fine = || {
+        let offsets = (-4..=4).flat_map(|b| (-4..=4).map(move |a| (a, b)));
+        let at = |(a, b): (i32, i32)| peak + ju * (a as f64 / 12.0) + jv * (b as f64 / 12.0);
+        offsets.map(at).max_by(|p, q| score(*p).0.total_cmp(&score(*q).0)).unwrap_or(peak)
+    };
+    Some(edges().unwrap_or_else(fine))
 }
 
 /// Offset (in modules along `axis`) of the small finder's centre from `c`.
@@ -391,8 +430,10 @@ mod tests {
 
     #[test]
     fn ratio_check() {
-        assert!(ratio(&[5, 5, 15, 5, 5], 3.0, 0.5).is_some());
-        assert!(ratio(&[5, 5, 5, 5, 5], 3.0, 0.5).is_none());
-        assert!(ratio(&[5, 5, 5, 5, 5], 1.0, 0.5).is_some());
+        assert!(ratio(&[5, 5, 15, 5, 5], 3.0, 0.5, 0.5).is_some());
+        assert!(ratio(&[5, 5, 5, 5, 5], 3.0, 0.5, 0.5).is_none());
+        assert!(ratio(&[5, 5, 5, 5, 5], 1.0, 0.5, 0.5).is_some());
+        assert!(ratio(&[9, 5, 15, 5, 5], 3.0, 0.5, 0.5).is_none());
+        assert!(ratio(&[9, 5, 15, 5, 5], 3.0, 0.5, 1.0).is_some());
     }
 }

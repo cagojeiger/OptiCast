@@ -1,7 +1,8 @@
 //! Timing lines (spec §2.3): 1-D profiles along a grid line, their edges, the
 //! module count between two finders, and the projective spacing of modules
-//! along the line. Also the residual check of a homography against all four
-//! timing lines, and an edge-based correction for lens distortion.
+//! along the line — from the edges, or from the phase of the alternation when
+//! blur merges them. Also the residual check of a homography against all four
+//! timing lines (by phase), and the correction it yields for lens distortion.
 
 use std::collections::VecDeque;
 
@@ -182,6 +183,11 @@ impl AxisFit {
         self.alpha / (d * d)
     }
 
+    /// The inverse of [`AxisFit::s`]: module offset at distance `s`.
+    pub fn t(&self, s: f64) -> f64 {
+        s / (self.alpha - self.beta * s)
+    }
+
     /// Least squares on the linearized form s = αt − βts, each point weighted.
     fn fit(points: &[(f64, f64, f64)]) -> Option<AxisFit> {
         let (mut a11, mut a12, mut a22, mut b1, mut b2) = (0.0, 0.0, 0.0, 0.0, 0.0);
@@ -337,6 +343,178 @@ pub fn measure_axis(img: &GrayImage, a: Point, b: Point, pitch_guess: f64, acros
     Some(Axis { modules, fit, origin: a, dir, length, residual, edges })
 }
 
+/// Width of a phase window, in modules: four periods of the timing pattern.
+const PHASE_WINDOW: f64 = 8.0;
+/// Least coherence of a window that counts as timing pattern (1 = a clean
+/// alternation, about 1/√samples for unrelated modules).
+const MIN_COHERENCE: f64 = 0.6;
+/// Share of the windows on a timing line (or on all four) that must be coherent.
+/// A timing line under heavy blur keeps about 0.7 (the data rows beside it bleed
+/// in); a line through data or a wrong geometry keeps under 0.2.
+pub const MIN_COHERENT_SHARE: f64 = 0.5;
+
+/// Where the timing pattern (1 on modules [10 + 2k, 11 + 2k), spec §2.3) sits in
+/// one window of samples `v` that the current model places at module
+/// coordinates `c`: the pattern's offset from there in modules (−1, 1] (the true
+/// coordinate of a sample is c + offset), and the window's coherence. Only the
+/// fundamental is used, and a symmetric blur leaves its phase alone.
+fn window_phase(c: &[f64], v: &[f64], bright: bool) -> (f64, f64) {
+    let n = v.len() as f64;
+    let mean = v.iter().sum::<f64>() / n;
+    let (mut re, mut im, mut energy) = (0.0, 0.0, 0.0);
+    for (&c, &v) in c.iter().zip(v) {
+        let d = if bright { v - mean } else { mean - v };
+        let (sin, cos) = (std::f64::consts::PI * (c - 10.5)).sin_cos();
+        re += d * cos;
+        im -= d * sin;
+        energy += d * d;
+    }
+    let coherence = re.hypot(im) / (n * energy / 2.0).sqrt().max(1e-9);
+    (im.atan2(re) / std::f64::consts::PI, coherence)
+}
+
+/// The pitch in [0.75, 1.33] × `guess` (2 % steps) at which phase windows over
+/// the profile `v` (samples `step` pixels apart) add up to the strongest
+/// alternation. Windows add by magnitude, so perspective (a pitch that drifts
+/// along the line) only blurs the peak.
+fn best_pitch(v: &[f64], step: f64, guess: f64) -> f64 {
+    let mut best = (f64::MIN, guess);
+    let mut pitch = 0.75 * guess;
+    while pitch < 1.34 * guess {
+        let len = ((PHASE_WINDOW * pitch / step).round() as usize).max(2);
+        // The phase advances by π·step/pitch per sample: rotate instead of sin/cos per sample.
+        let (sin, cos) = (std::f64::consts::PI * step / pitch).sin_cos();
+        let (mut total, mut covered) = (0.0, 0);
+        for window in v.chunks_exact(len) {
+            let (mut re, mut im, mut ur, mut ui, mut sum) = (0.0, 0.0, 0.0, 0.0, 0.0);
+            let (mut er, mut ei) = (1.0, 0.0);
+            for &x in window {
+                (re, im, ur, ui, sum) = (re + x * er, im + x * ei, ur + er, ui + ei, sum + x);
+                (er, ei) = (er * cos - ei * sin, er * sin + ei * cos);
+            }
+            // Σ (v − mean)·e^{iθ} over the window.
+            let mean = sum / len as f64;
+            total += (re - mean * ur).hypot(im - mean * ui);
+            covered += len;
+        }
+        if covered > 0 && total / covered as f64 > best.0 {
+            best = (total / covered as f64, pitch);
+        }
+        pitch *= 1.02;
+    }
+    best.1
+}
+
+/// Blur-tolerant [`measure_axis`]: instead of resolving every edge, the phase
+/// of the alternating timing line in overlapping windows, unwrapped along the
+/// line and fitted with the projective spacing. The fit runs through the
+/// finder centre at `a` (module 5.5); the count follows from where it puts the
+/// centre at `b` (count − 5.5), which must land on a module centre.
+pub fn phase_axis(img: &GrayImage, a: Point, b: Point, pitch_guess: f64, across: f64, bright: bool) -> Option<Axis> {
+    let length = a.dist(b);
+    if pitch_guess.is_nan() || pitch_guess <= 0.5 || length < 30.0 * pitch_guess {
+        return None;
+    }
+    let dir = (b - a).unit();
+    let half_width = 0.25 * across.min(pitch_guess * 2.0);
+    let step = (pitch_guess / 4.0).clamp(0.25, 1.0);
+    let profile = Profile::sample(img, a, dir, 0.0, length, step, half_width, dir.perp());
+    let n = profile.values.len();
+    // The finders' run lengths give the pitch to 10–15 %; the alternation over
+    // the whole line pins it down.
+    let guard = ((6.0 * pitch_guess / step) as usize).min(n / 4);
+    let pitch = best_pitch(&profile.values[guard..n - guard], step, pitch_guess);
+    // The timing modules start 4.5 modules from either centre; half a module more
+    // keeps the windows off the separators.
+    let i0 = ((5.0 * pitch / step).ceil() as usize).min(n);
+    let i1 = (((length - 5.0 * pitch) / step).floor().max(0.0) as usize + 1).min(n);
+    if i1 < i0 + 2 {
+        return None;
+    }
+    let s: Vec<f64> = (i0..i1).map(|i| i as f64 * step).collect();
+    let values = &profile.values[i0..i1];
+    let mut model = AxisFit { alpha: pitch, beta: 0.0 };
+    let mut points: Vec<(f64, f64, f64)> = Vec::new();
+    let mut coherent = 0.0;
+    for pass in 0..2 {
+        let c: Vec<f64> = s.iter().map(|&s| 5.5 + model.t(s)).collect();
+        if !c.windows(2).all(|w| w[1] > w[0]) {
+            return None;
+        }
+        // Windows one period apart, wholly inside the sampled stretch.
+        let (first, last) = (c[0] + PHASE_WINDOW / 2.0, c[c.len() - 1] - PHASE_WINDOW / 2.0);
+        let mut windows = Vec::new();
+        let mut centre = first;
+        while centre <= last {
+            let i0 = c.partition_point(|&x| x < centre - PHASE_WINDOW / 2.0);
+            let i1 = c.partition_point(|&x| x < centre + PHASE_WINDOW / 2.0);
+            let (offset, k) = window_phase(&c[i0..i1], &values[i0..i1], bright);
+            windows.push((centre, offset, k));
+            centre += 2.0;
+        }
+        if windows.len() < 3 {
+            return None;
+        }
+        coherent = windows.iter().filter(|w| w.2 >= MIN_COHERENCE).count() as f64 / windows.len() as f64;
+        // Unwrap: neighbouring windows are two modules apart, so their offsets differ
+        // by far less than a period unless the model is off by 50 %.
+        let mut prev: Option<f64> = None;
+        let unwrapped: Vec<(f64, f64, f64)> = windows
+            .iter()
+            .filter(|w| w.2 >= MIN_COHERENCE)
+            .map(|&(centre, offset, k)| {
+                let off = match prev {
+                    Some(p) => offset + 2.0 * ((p - offset) / 2.0).round(),
+                    None => offset,
+                };
+                prev = Some(off);
+                (centre, off, k)
+            })
+            .collect();
+        if unwrapped.len() < 3 {
+            return None;
+        }
+        // Near TL even a pitch a few per cent off keeps the first window within a
+        // period of the truth; a shift by a whole period is tried anyway and must fit worse.
+        let shifts: &[f64] = if pass == 0 { &[0.0, -2.0, 2.0] } else { &[0.0] };
+        let mut best: Option<(f64, AxisFit)> = None;
+        for &shift in shifts {
+            let pts: Vec<(f64, f64, f64)> = unwrapped
+                .iter()
+                .map(|&(centre, off, k)| (centre + off + shift - 5.5, model.s(centre - 5.5), k))
+                .collect();
+            let Some(fit) = AxisFit::fit(&pts) else { continue };
+            let rms = (pts.iter().map(|&(t, s, w)| w * (fit.t(s) - t).powi(2)).sum::<f64>()
+                / pts.iter().map(|p| p.2).sum::<f64>())
+            .sqrt();
+            if best.is_none_or(|b| rms < b.0) {
+                best = Some((rms, fit));
+                points = pts;
+            }
+        }
+        model = best?.1;
+    }
+    let far_t = model.t(length);
+    if !far_t.is_finite() || far_t < 10.0 {
+        return None;
+    }
+    let far = far_t.round();
+    let modules = far as usize + 11;
+    let weight: f64 = points.iter().map(|p| p.2).sum();
+    points.push((far, length, 0.25 * weight));
+    let fit = AxisFit::fit(&points)?;
+    let residual = points.iter().map(|&(t, s, _)| (fit.t(s) - t).abs()).fold(0.0, f64::max);
+    // The finder centre must sit on a module centre of the fitted spacing, most
+    // windows must show the pattern, and none may stray far from the fit.
+    if (far_t - far).abs() > 0.3 || coherent < MIN_COHERENT_SHARE || residual > 0.5 {
+        return None;
+    }
+    let mut edges: Vec<(f64, f64)> = points.iter().map(|&(t, s, _)| (t + 5.5, s)).collect();
+    edges.push((5.5, 0.0));
+    edges.sort_by(|a, b| a.0.total_cmp(&b.0));
+    Some(Axis { modules, fit, origin: a, dir, length, residual, edges })
+}
+
 /// The homography fixed by the two measured lines through the TL finder
 /// (module (5.5, 5.5)): along each, a 1-D projective spacing. With u = x − 5.5,
 /// v = y − 5.5: H(u, v) = TL + (α_r u e_r + α_c v e_c) / (1 + β_r u + β_c v).
@@ -366,71 +544,66 @@ pub enum Line {
     Col(usize),
 }
 
-/// Edges on one grid line compared with where `hom` puts the module
-/// boundaries of the layout's fixed pattern there: (boundary coordinate,
-/// measured − predicted in modules) for every boundary found within ±0.45 modules.
-pub fn line_residuals(img: &GrayImage, hom: &Homography, layout: &Layout, line: Line) -> Vec<(f64, f64)> {
-    let (w, h) = (layout.width(), layout.height());
-    let (len, at) = match line {
-        Line::Row(y) => (w, y as f64 + 0.5),
-        Line::Col(x) => (h, x as f64 + 0.5),
+/// How far one timing line sits from where `hom` puts it: the phase of its
+/// alternating stretch (spec §2.3: 1 on [10 + 2k, 11 + 2k)), sampled through
+/// `hom` in module coordinates, in windows one module apart. Unlike its edges,
+/// the phase survives blur that merges 1-module modules. Returns (window
+/// centre, measured − predicted in modules) for every coherent window, and how
+/// many windows there were.
+pub fn line_residuals(
+    img: &GrayImage,
+    hom: &Homography,
+    layout: &Layout,
+    line: Line,
+    bright: bool,
+) -> (Vec<(f64, f64)>, usize) {
+    // Eight samples per module, each the mean of five points across the line.
+    const PER_MODULE: usize = 8;
+    let len = match line {
+        Line::Row(_) => layout.width(),
+        Line::Col(_) => layout.height(),
     };
     let value = |c: usize| match line {
         Line::Row(y) => layout.fixed(c, y),
         Line::Col(x) => layout.fixed(x, c),
     };
-    let point = |c: f64| match line {
-        Line::Row(_) => hom.apply(c, at),
-        Line::Col(_) => hom.apply(at, c),
+    let point = |c: f64, d: f64| match line {
+        Line::Row(y) => hom.apply(c, y as f64 + 0.5 + d),
+        Line::Col(x) => hom.apply(x as f64 + 0.5 + d, c),
     };
-    let side = |c: f64, d: f64| match line {
-        Line::Row(_) => hom.apply(c, at + d),
-        Line::Col(_) => hom.apply(at + d, c),
-    };
-    let mid = len as f64 / 2.0;
-    let across = side(mid, 0.5).dist(side(mid, -0.5));
-    let (p0, p1) = (point(1.0), point(len as f64 - 1.0));
+    let end = (10..len).find(|&c| value(c) != Some((c - 10) % 2 == 0)).unwrap_or(len);
     // Timing lines run between finders inside the view; a line thrown far
     // outside it by a degenerate homography is not read at all.
     let margin = 0.05 * diagonal(img);
-    if !near_image(img, p0, margin) || !near_image(img, p1, margin) || !across.is_finite() {
-        return Vec::new();
+    if ((end - 10) as f64) < PHASE_WINDOW
+        || !near_image(img, point(10.0, 0.0), margin)
+        || !near_image(img, point(end as f64, 0.0), margin)
+    {
+        return (Vec::new(), 0);
     }
-    let length = p0.dist(p1);
-    let pitch = length / (len as f64 - 2.0);
-    if pitch.is_nan() || pitch <= 1.0 {
-        return Vec::new();
-    }
-    let dir = (p1 - p0).unit();
-    let step = (pitch / 4.0).clamp(0.25, 1.0);
-    let profile = Profile::sample(img, p0, dir, 0.0, length, step, 0.25 * across, dir.perp())
-        .smoothed((pitch / 6.0 / step).round() as usize);
-    let threshold = profile.envelope_mid((2.5 * pitch / step).round() as usize, 0);
-    let edges = profile.edges(&threshold, 0.35 * pitch / step);
+    let c: Vec<f64> = (0..(end - 10) * PER_MODULE).map(|i| 10.0 + (i as f64 + 0.5) / PER_MODULE as f64).collect();
+    let v: Vec<f64> = c
+        .iter()
+        .map(|&c| {
+            let at = |d: f64| {
+                let p = point(c, d);
+                img.bilinear(p.x, p.y)
+            };
+            (at(0.0) + at(0.25) + at(-0.25) + at(0.125) + at(-0.125)) / 5.0
+        })
+        .collect();
+    let half = PHASE_WINDOW as usize * PER_MODULE / 2;
     let mut out = Vec::new();
-    for b in 2..len - 1 {
-        let (Some(u), Some(v)) = (value(b - 1), value(b)) else { continue };
-        if u == v {
-            continue;
-        }
-        let predicted = (point(b as f64) - p0).dot(dir);
-        let local = point(b as f64 + 0.5).dist(point(b as f64 - 0.5));
-        // Edges are sorted: the nearest is next to the insertion point.
-        let at = edges.partition_point(|&e| e < predicted);
-        let candidates = [at.checked_sub(1), Some(at)];
-        let Some(e) = candidates
-            .into_iter()
-            .flatten()
-            .filter_map(|i| edges.get(i).copied())
-            .min_by(|x, y| (x - predicted).abs().total_cmp(&(y - predicted).abs()))
-        else {
-            break;
-        };
-        if (e - predicted).abs() < 0.45 * local {
-            out.push((b as f64, (e - predicted) / local));
+    let mut windows = 0;
+    for i in (half..=c.len() - half).step_by(PER_MODULE) {
+        windows += 1;
+        let (offset, coherence) = window_phase(&c[i - half..i + half], &v[i - half..i + half], bright);
+        if coherence >= MIN_COHERENCE {
+            // The pattern sits `offset` further on, so its boundaries show up that much earlier.
+            out.push((c[i] - 0.5 / PER_MODULE as f64, -offset));
         }
     }
-    out
+    (out, windows)
 }
 
 /// Along-line displacement measured on the four timing lines, blended into the
@@ -555,7 +728,7 @@ mod tests {
             let m6 = -(1.0 - eps) / 198.0;
             let hom = Homography([6.0, 0.0, 40.0, 0.0, 6.0, 40.0, m6, 0.0, 1.0]);
             let t = std::time::Instant::now();
-            let out = line_residuals(&img, &hom, &layout, Line::Row(100));
+            let (out, _) = line_residuals(&img, &hom, &layout, Line::Row(100), true);
             assert!(t.elapsed().as_millis() < 200, "eps {eps}: {:?}", t.elapsed());
             assert!(out.is_empty());
         }

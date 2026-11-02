@@ -9,14 +9,17 @@
 //!    from the cross product, and the finders' color gives the polarity.
 //! 2. The top (y = 5) and left (x = 5) timing lines between the finder centres:
 //!    their edges give W and H by counting and the projective module spacing
-//!    along both lines, which fixes a first homography.
+//!    along both lines, which fixes a first homography. When blur merges the
+//!    edges, the phase of the alternation along the line gives the same.
 //! 3. Format information: top copy (rows 2–3), else the bottom copy.
 //! 4. The small bottom-right finder near its predicted position, and the
 //!    4-point homography TL(5.5, 5.5), TR(W − 5.5, 5.5), BR(W − 4.5, H − 4.5),
 //!    BL(5.5, H − 5.5).
-//! 5. Residual check on all four timing lines; above 0.3 module an edge-based
-//!    correction (lens distortion) is blended in.
-//! 6. 3×3-mean sampling of every module against a 7×7-module local mean.
+//! 5. Residual check on all four timing lines (the phase of their alternation,
+//!    window by window); above 0.1 module the measured offsets are blended in
+//!    as a correction (lens distortion, finder centres off under blur).
+//! 6. 3×3-mean sampling of every module against a 7×7-module local mean,
+//!    shifted towards the neighbours' mean when blur spreads modules.
 //!
 //! The next frame first looks for the finders near their last positions
 //! (tracking) and falls back to the full search.
@@ -97,7 +100,7 @@ pub struct Detection {
     pub tracked: bool,
     /// 95th-percentile timing-line residual of the homography, in modules.
     pub residual: f64,
-    /// The edge-based correction was applied (residual above 0.3 module).
+    /// The timing-line correction was applied (residual above 0.1 module).
     pub corrected: bool,
 }
 
@@ -122,8 +125,10 @@ pub struct Vision {
     misses: u64,
 }
 
-/// Residual above which the edge-based correction is applied.
-const CORRECTION_THRESHOLD: f64 = 0.3;
+/// Residual above which the timing-line correction is applied: two to three
+/// times the scatter of the phase measurement on a sharp, flat view. At a few
+/// pixels per module even a fifth of a module costs tiles.
+const CORRECTION_THRESHOLD: f64 = 0.1;
 /// Residual above which the geometry is rejected even after correction.
 const REJECT_THRESHOLD: f64 = 0.45;
 
@@ -186,7 +191,7 @@ impl Vision {
             self.cands.clear();
             let all = Rect { x0: 0, y0: 0, x1: width, y1: height };
             self.binarizer.binarize(&img, all, window | 1, smooth, &mut self.bitmap);
-            finder::scan(&self.bitmap, 1, &mut self.cands);
+            finder::scan(&img, &self.bitmap, 1, &mut self.cands);
             for t in finder::triples(&self.cands, 6) {
                 if let Some(d) = self.decode(&img, t, false) {
                     self.misses = 0;
@@ -216,7 +221,7 @@ impl Vision {
             for (window, smooth) in [(track.window, c.module() >= 4.0), (small, false)] {
                 self.binarizer.binarize(img, rect, window, smooth, &mut self.bitmap);
                 self.cands.clear();
-                finder::scan(&self.bitmap, 1, &mut self.cands);
+                finder::scan(img, &self.bitmap, 1, &mut self.cands);
                 *slot = self
                     .cands
                     .iter()
@@ -239,8 +244,12 @@ impl Vision {
         let (dir_top, dir_left) = ((tr - tl).unit(), (bl - tl).unit());
         let pitch_top = (t.tl.pitch_along(dir_top) + t.tr.pitch_along(dir_top)) / 2.0;
         let pitch_left = (t.tl.pitch_along(dir_left) + t.bl.pitch_along(dir_left)) / 2.0;
-        let top = timing::measure_axis(img, tl, tr, pitch_top, pitch_left)?;
-        let left = timing::measure_axis(img, tl, bl, pitch_left, pitch_top)?;
+        let axis = |a: Point, b: Point, along: f64, across: f64| {
+            timing::measure_axis(img, a, b, along, across)
+                .or_else(|| timing::phase_axis(img, a, b, along, across, bright))
+        };
+        let top = axis(tl, tr, pitch_top, pitch_left)?;
+        let left = axis(tl, bl, pitch_left, pitch_top)?;
         let h2 = timing::two_line_homography(&top, &left);
 
         self.reached(Stage::Format);
@@ -274,10 +283,12 @@ impl Vision {
             return None;
         }
         let lines = [Line::Row(5), Line::Row(h - 6), Line::Col(5), Line::Col(w - 6)];
-        let res = lines.map(|l| timing::line_residuals(img, &hom, &layout, l));
+        let measured = lines.map(|l| timing::line_residuals(img, &hom, &layout, l, bright));
+        let windows: usize = measured.iter().map(|m| m.1).sum();
+        let res = measured.map(|m| m.0);
         let mut all: Vec<f64> = res.iter().flatten().map(|r| r.1.abs()).collect();
-        // The timing lines alone give W + H − 40 boundaries; most must line up.
-        if all.len() < (w + h).saturating_sub(40) {
+        // Most windows along the four timing lines must show their alternation.
+        if all.is_empty() || (all.len() as f64) < timing::MIN_COHERENT_SHARE * windows as f64 {
             return None;
         }
         all.sort_by(f64::total_cmp);
@@ -291,7 +302,7 @@ impl Vision {
             }
         }
 
-        let grid = self.sampler.sample(img, &hom, corr.as_ref(), w, h, bright);
+        let grid = self.sampler.sample(img, &hom, corr.as_ref(), &layout, bright);
         self.reached(Stage::Done);
         let module = (t.tl.module() + t.tr.module() + t.bl.module()) / 3.0;
         let long = img.width.max(img.height);
@@ -313,8 +324,8 @@ impl Vision {
 }
 
 /// The correction follows the measured residuals, so what it cannot absorb is
-/// inconsistency between neighbouring boundaries on a line (a wrong edge match):
-/// the 95th percentile of those jumps, in modules.
+/// inconsistency between neighbouring windows on a line (a stretch read off the
+/// wrong modules): the 95th percentile of those jumps, in modules.
 fn line_jumps(res: &[Vec<(f64, f64)>; 4]) -> f64 {
     let mut worst: Vec<f64> = Vec::new();
     for line in res {
@@ -360,7 +371,8 @@ fn four_point(
 }
 
 /// Reads one FI copy, with `point` mapping module coordinates to the image. Each bit is compared with the mean of four
-/// timing modules (two light, two dark) in the timing row next to it.
+/// timing modules (two light, two dark) in the timing row next to it; if that fails the check, with the threshold
+/// moved halfway to the mean of the bit's four neighbours (blur, as in the sampler).
 fn read_fi(
     img: &GrayImage,
     point: impl Fn(f64, f64) -> Point,
@@ -384,16 +396,20 @@ fn read_fi(
         }
     };
     let timing: Vec<f64> = (10..62).map(|x| sample(x, timing_row)).collect();
-    let mut bits = [false; FI_BITS];
-    for (i, bit) in bits.iter_mut().enumerate() {
-        let (x, y) = match which {
-            FiCopy::Top => fi_top_position(i),
-            FiCopy::Bottom => fi_bottom_position(i, height),
-        };
-        let a = x.saturating_sub(1).clamp(10, 54) - 10;
-        let threshold = timing[a..a + 4].iter().sum::<f64>() / 4.0;
-        *bit = (sample(x, y) > threshold) == bright;
-    }
-    let fi = FormatInfo::from_bits(&bits)?;
-    Layout::from_format(fi).is_ok().then_some(fi)
+    let read = |shift: f64| {
+        let mut bits = [false; FI_BITS];
+        for (i, bit) in bits.iter_mut().enumerate() {
+            let (x, y) = match which {
+                FiCopy::Top => fi_top_position(i),
+                FiCopy::Bottom => fi_bottom_position(i, height),
+            };
+            let a = x.saturating_sub(1).clamp(10, 54) - 10;
+            let threshold = timing[a..a + 4].iter().sum::<f64>() / 4.0;
+            let near = (sample(x - 1, y) + sample(x + 1, y) + sample(x, y - 1) + sample(x, y + 1)) / 4.0;
+            *bit = (sample(x, y) > threshold + shift * (near - threshold)) == bright;
+        }
+        let fi = FormatInfo::from_bits(&bits)?;
+        Layout::from_format(fi).is_ok().then_some(fi)
+    };
+    read(0.0).or_else(|| read(0.5))
 }
