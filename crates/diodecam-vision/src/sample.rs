@@ -6,7 +6,7 @@
 //! neighbours, which takes that back out (a lone 1 among 0s stays above it):
 //! of [`SHIFTS`], the one that misreads the fewest of the layout's known modules.
 
-use diodecam_core::{Layout, ModuleGrid};
+use diodecam_core::{FormatInfo, Layout, ModuleGrid};
 
 use crate::binarize::GrayImage;
 use crate::geom::Homography;
@@ -23,8 +23,9 @@ const SHIFTS: [f64; 3] = [0.0, 0.5, 0.75];
 pub struct Sampler {
     values: Vec<u32>,
     integral: Vec<u32>,
-    /// Per module: the 7×7 mean and the mean of the four neighbours.
-    means: Vec<(f64, f64)>,
+    /// The fixed modules (x, y, value) of the layout for `fixed_for`.
+    fixed: Vec<(usize, usize, bool)>,
+    fixed_for: Option<FormatInfo>,
 }
 
 impl Sampler {
@@ -60,35 +61,52 @@ impl Sampler {
                 self.integral[(y + 1) * iw + x + 1] = self.integral[y * iw + x + 1] + run;
             }
         }
-        self.means.clear();
-        let v = |x: usize, y: usize| self.values[y * w + x] as f64;
-        for y in 0..h {
-            let (y0, y1) = (y.saturating_sub(R), (y + R + 1).min(h));
-            for x in 0..w {
-                let (x0, x1) = (x.saturating_sub(R), (x + R + 1).min(w));
-                let sum = self.integral[y1 * iw + x1] + self.integral[y0 * iw + x0]
-                    - self.integral[y0 * iw + x1]
-                    - self.integral[y1 * iw + x0];
-                let mean = sum as f64 / ((x1 - x0) * (y1 - y0)) as f64;
-                let neighbours = [(x.wrapping_sub(1), y), (x + 1, y), (x, y.wrapping_sub(1)), (x, y + 1)];
-                let (mut near, mut n) = (0.0, 0.0);
-                for (nx, ny) in neighbours.into_iter().filter(|&(nx, ny)| nx < w && ny < h) {
-                    near += v(nx, ny);
-                    n += 1.0;
+        if self.fixed_for != Some(layout.format()) {
+            self.fixed.clear();
+            for y in 0..h {
+                for x in 0..w {
+                    if let Some(f) = layout.fixed(x, y) {
+                        self.fixed.push((x, y, f));
+                    }
                 }
-                self.means.push((mean, near / n));
+            }
+            self.fixed_for = Some(layout.format());
+        }
+        let (values, integral) = (&self.values, &self.integral);
+        let v = |x: usize, y: usize| values[y * w + x] as f64;
+        // The 7×7-module mean around (x, y).
+        let mean = |x: usize, y: usize| {
+            let (x0, x1, y0, y1) = (x.saturating_sub(R), (x + R + 1).min(w), y.saturating_sub(R), (y + R + 1).min(h));
+            let sum = integral[y1 * iw + x1] + integral[y0 * iw + x0] - integral[y0 * iw + x1] - integral[y1 * iw + x0];
+            sum as f64 / ((x1 - x0) * (y1 - y0)) as f64
+        };
+        // The mean of the four neighbours inside the grid.
+        let near = |x: usize, y: usize| {
+            let neighbours = [(x.wrapping_sub(1), y), (x + 1, y), (x, y.wrapping_sub(1)), (x, y + 1)];
+            let (mut sum, mut n) = (0.0, 0.0);
+            for (nx, ny) in neighbours.into_iter().filter(|&(nx, ny)| nx < w && ny < h) {
+                sum += v(nx, ny);
+                n += 1.0;
+            }
+            sum / n
+        };
+        // Misreads of the known modules under every shift, in one pass.
+        let mut misreads = [0usize; SHIFTS.len()];
+        for &(x, y, f) in &self.fixed {
+            let (value, m, n) = (v(x, y), mean(x, y), near(x, y));
+            for (count, s) in misreads.iter_mut().zip(SHIFTS) {
+                *count += (((value > m + s * (n - m)) == bright) != f) as usize;
             }
         }
-        let bit = |i: usize, shift: f64| {
-            let (mean, near) = self.means[i];
-            (self.values[i] as f64 > mean + shift * (near - mean)) == bright
-        };
-        let misread =
-            |shift: f64| (0..w * h).filter(|&i| layout.fixed(i % w, i / w).is_some_and(|f| f != bit(i, shift))).count();
-        let shift = SHIFTS.into_iter().min_by_key(|&s| misread(s)).unwrap_or(SHIFTS[0]);
+        let best = (1..SHIFTS.len()).fold(0, |b, k| if misreads[k] < misreads[b] { k } else { b });
+        let shift = SHIFTS[best];
         let mut grid = ModuleGrid::new(w, h);
-        for i in 0..w * h {
-            grid.set_index(i, bit(i, shift));
+        for y in 0..h {
+            for x in 0..w {
+                let m = mean(x, y);
+                let threshold = if shift == 0.0 { m } else { m + shift * (near(x, y) - m) };
+                grid.set(x, y, (v(x, y) > threshold) == bright);
+            }
         }
         grid
     }

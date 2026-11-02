@@ -5,7 +5,9 @@
 //! timing lines (by phase), and the correction it yields for lens distortion.
 
 use std::collections::VecDeque;
+use std::f64::consts::PI;
 
+use diodecam_core::layout::MAX_SIDE;
 use diodecam_core::Layout;
 
 use crate::binarize::GrayImage;
@@ -217,13 +219,31 @@ pub struct Axis {
     pub origin: Point,
     pub dir: Point,
     pub length: f64,
-    /// Largest edge residual of the fit, in modules.
+    /// Largest residual of the fit over its points, in modules.
     pub residual: f64,
-    /// Measured (module boundary, s) pairs, in order.
+    /// The points the fit went through as (module coordinate, s), in order: module
+    /// boundaries from [`measure_axis`], phase points from [`phase_axis`].
     pub edges: Vec<(f64, f64)>,
 }
 
 impl Axis {
+    /// The axis from `origin` (module 5.5) along `dir` through the fitted
+    /// `points` (module offset from 5.5, s, weight) and the centre itself.
+    fn new(
+        modules: usize,
+        fit: AxisFit,
+        origin: Point,
+        dir: Point,
+        length: f64,
+        residual: f64,
+        points: &[(f64, f64, f64)],
+    ) -> Axis {
+        let mut edges: Vec<(f64, f64)> = points.iter().map(|&(t, s, _)| (t + 5.5, s)).collect();
+        edges.push((5.5, 0.0));
+        edges.sort_by(|a, b| a.0.total_cmp(&b.0));
+        Axis { modules, fit, origin, dir, length, residual, edges }
+    }
+
     /// Distance along the line of module coordinate `c`: interpolated between
     /// measured edges where there are any, from the fit elsewhere.
     pub fn s_at(&self, c: f64) -> f64 {
@@ -337,10 +357,7 @@ pub fn measure_axis(img: &GrayImage, a: Point, b: Point, pitch_guess: f64, acros
     if residual > 1.0 {
         return None;
     }
-    let mut edges: Vec<(f64, f64)> = points.iter().map(|&(t, s, _)| (t + 5.5, s)).collect();
-    edges.push((5.5, 0.0));
-    edges.sort_by(|a, b| a.0.total_cmp(&b.0));
-    Some(Axis { modules, fit, origin: a, dir, length, residual, edges })
+    Some(Axis::new(modules, fit, a, dir, length, residual, &points))
 }
 
 /// Width of a phase window, in modules: four periods of the timing pattern.
@@ -350,7 +367,8 @@ const PHASE_WINDOW: f64 = 8.0;
 const MIN_COHERENCE: f64 = 0.6;
 /// Share of the windows on a timing line (or on all four) that must be coherent.
 /// A timing line under heavy blur keeps about 0.7 (the data rows beside it bleed
-/// in); a line through data or a wrong geometry keeps under 0.2.
+/// in); a line through data keeps under 0.2. A geometry off in scale still sees
+/// the alternation in every window and stays coherent: only the offsets show it.
 pub const MIN_COHERENT_SHARE: f64 = 0.5;
 
 /// Where the timing pattern (1 on modules [10 + 2k, 11 + 2k), spec §2.3) sits in
@@ -438,7 +456,9 @@ pub fn phase_axis(img: &GrayImage, a: Point, b: Point, pitch_guess: f64, across:
     let mut coherent = 0.0;
     for pass in 0..2 {
         let c: Vec<f64> = s.iter().map(|&s| 5.5 + model.t(s)).collect();
-        if !c.windows(2).all(|w| w[1] > w[0]) {
+        // Monotonic, and no longer than the largest grid: a degenerate model would
+        // otherwise spread the windows over thousands of modules.
+        if !c.windows(2).all(|w| w[1] > w[0]) || c[c.len() - 1] > MAX_SIDE as f64 + 16.0 {
             return None;
         }
         // Windows one period apart, wholly inside the sampled stretch.
@@ -509,10 +529,7 @@ pub fn phase_axis(img: &GrayImage, a: Point, b: Point, pitch_guess: f64, across:
     if (far_t - far).abs() > 0.3 || coherent < MIN_COHERENT_SHARE || residual > 0.5 {
         return None;
     }
-    let mut edges: Vec<(f64, f64)> = points.iter().map(|&(t, s, _)| (t + 5.5, s)).collect();
-    edges.push((5.5, 0.0));
-    edges.sort_by(|a, b| a.0.total_cmp(&b.0));
-    Some(Axis { modules, fit, origin: a, dir, length, residual, edges })
+    Some(Axis::new(modules, fit, a, dir, length, residual, &points))
 }
 
 /// The homography fixed by the two measured lines through the TL finder
@@ -548,8 +565,8 @@ pub enum Line {
 /// alternating stretch (spec §2.3: 1 on [10 + 2k, 11 + 2k)), sampled through
 /// `hom` in module coordinates, in windows one module apart. Unlike its edges,
 /// the phase survives blur that merges 1-module modules. Returns (window
-/// centre, measured − predicted in modules) for every coherent window, and how
-/// many windows there were.
+/// centre, measured − predicted in modules) for every coherent window, unwrapped
+/// along the line ([`unwrap_offsets`]), and how many windows there were.
 pub fn line_residuals(
     img: &GrayImage,
     hom: &Homography,
@@ -567,43 +584,106 @@ pub fn line_residuals(
         Line::Row(y) => layout.fixed(c, y),
         Line::Col(x) => layout.fixed(x, c),
     };
-    let point = |c: f64, d: f64| match line {
-        Line::Row(y) => hom.apply(c, y as f64 + 0.5 + d),
-        Line::Col(x) => hom.apply(x as f64 + 0.5 + d, c),
+    // Module coordinates of the point `c` along the line, on its centre line.
+    let at = |c: f64| match line {
+        Line::Row(y) => (c, y as f64 + 0.5),
+        Line::Col(x) => (x as f64 + 0.5, c),
+    };
+    let point = |c: f64| {
+        let (x, y) = at(c);
+        hom.apply(x, y)
     };
     let end = (10..len).find(|&c| value(c) != Some((c - 10) % 2 == 0)).unwrap_or(len);
     // Timing lines run between finders inside the view; a line thrown far
     // outside it by a degenerate homography is not read at all.
     let margin = 0.05 * diagonal(img);
-    if ((end - 10) as f64) < PHASE_WINDOW
-        || !near_image(img, point(10.0, 0.0), margin)
-        || !near_image(img, point(end as f64, 0.0), margin)
+    let span = PHASE_WINDOW as usize;
+    if end.saturating_sub(10) < span
+        || !near_image(img, point(10.0), margin)
+        || !near_image(img, point(end as f64), margin)
     {
         return (Vec::new(), 0);
     }
-    let c: Vec<f64> = (0..(end - 10) * PER_MODULE).map(|i| 10.0 + (i as f64 + 0.5) / PER_MODULE as f64).collect();
-    let v: Vec<f64> = c
-        .iter()
-        .map(|&c| {
-            let at = |d: f64| {
-                let p = point(c, d);
-                img.bilinear(p.x, p.y)
+    // Sample i sits at c = 10 + (i + ½)/8, where the pattern's phase π(c − 10.5)
+    // is π(i − 3.5)/8: sixteen values, one period.
+    let wave: [(f64, f64); 2 * PER_MODULE] =
+        std::array::from_fn(|i| (PI * (i as f64 - 3.5) / PER_MODULE as f64).sin_cos());
+    // Per module of the line: Σv, Σv², Σv·cos, Σv·sin over its samples. The
+    // points across the line step along the image of one module across it there.
+    let sums: Vec<[f64; 4]> = (10..end)
+        .map(|m| {
+            let (x, y) = at(m as f64 + 0.5);
+            let (ju, jv) = hom.jacobian(x, y);
+            let across = match line {
+                Line::Row(_) => jv,
+                Line::Col(_) => ju,
             };
-            (at(0.0) + at(0.25) + at(-0.25) + at(0.125) + at(-0.125)) / 5.0
+            let mut s = [0.0; 4];
+            for j in 0..PER_MODULE {
+                let i = (m - 10) * PER_MODULE + j;
+                let p = point(10.0 + (i as f64 + 0.5) / PER_MODULE as f64);
+                let v = [0.0, 0.25, -0.25, 0.125, -0.125]
+                    .iter()
+                    .map(|&d| {
+                        let q = p + across * d;
+                        img.bilinear(q.x, q.y)
+                    })
+                    .sum::<f64>()
+                    / 5.0;
+                let (sin, cos) = wave[i % wave.len()];
+                s = [s[0] + v, s[1] + v * v, s[2] + v * cos, s[3] + v * sin];
+            }
+            s
         })
         .collect();
-    let half = PHASE_WINDOW as usize * PER_MODULE / 2;
+    // Windows of eight modules, one module apart. A window spans whole periods,
+    // so the wave sums to zero over it and the window's mean drops out.
+    let n = (span * PER_MODULE) as f64;
+    let windows = sums.len() + 1 - span;
     let mut out = Vec::new();
-    let mut windows = 0;
-    for i in (half..=c.len() - half).step_by(PER_MODULE) {
-        windows += 1;
-        let (offset, coherence) = window_phase(&c[i - half..i + half], &v[i - half..i + half], bright);
+    for k in 0..windows {
+        let s = sums[k..k + span].iter().fold([0.0; 4], |a, m| [a[0] + m[0], a[1] + m[1], a[2] + m[2], a[3] + m[3]]);
+        let (re, im) = if bright { (s[2], -s[3]) } else { (-s[2], s[3]) };
+        let energy = (s[1] - s[0] * s[0] / n).max(0.0);
+        let coherence = re.hypot(im) / (n * energy / 2.0).sqrt().max(1e-9);
         if coherence >= MIN_COHERENCE {
-            // The pattern sits `offset` further on, so its boundaries show up that much earlier.
-            out.push((c[i] - 0.5 / PER_MODULE as f64, -offset));
+            // The pattern sits `offset` further on, so its boundaries show up that
+            // much earlier. Window k covers modules [10 + k, 18 + k).
+            let offset = im.atan2(re) / PI;
+            out.push(((10 + k + span / 2) as f64, -offset));
         }
     }
+    unwrap_offsets(&mut out);
     (out, windows)
+}
+
+/// Unwraps the offsets (−1, 1] of one line's windows (centre, offset) in place.
+/// Windows at most two modules apart share at least ¾ of their samples, so their
+/// offsets differ by far less than a period: each such run is unwrapped. A run
+/// as long as a window also continues from the previous such run across the
+/// gap; shorter runs may be noise and are left as measured.
+fn unwrap_offsets(line: &mut [(f64, f64)]) {
+    // `b` moved by whole periods to the nearest of `a`.
+    let nearest = |a: f64, b: f64| b + 2.0 * ((a - b) / 2.0).round();
+    let mut last: Option<f64> = None;
+    let mut start = 0;
+    while start < line.len() {
+        let mut end = start + 1;
+        while end < line.len() && line[end].0 - line[end - 1].0 <= 2.0 {
+            end += 1;
+        }
+        let long = end - start >= PHASE_WINDOW as usize;
+        if let (true, Some(l)) = (long, last) {
+            line[start].1 = nearest(l, line[start].1);
+        }
+        for k in start + 1..end {
+            line[k].1 = nearest(line[k - 1].1, line[k].1);
+        }
+        if long {
+            last = Some(line[end - 1].1);
+        }
+        start = end;
+    }
 }
 
 /// Along-line displacement measured on the four timing lines, blended into the
@@ -732,6 +812,25 @@ mod tests {
             assert!(t.elapsed().as_millis() < 200, "eps {eps}: {:?}", t.elapsed());
             assert!(out.is_empty());
         }
+    }
+
+    #[test]
+    fn offsets_unwrap_along_runs() {
+        let wrap = |x: f64| x - 2.0 * ((x - 1.0) / 2.0).ceil();
+        // One run of neighbouring windows: a drift past one module comes back whole.
+        let ramp: Vec<(f64, f64)> = (0..40).map(|i| (14.0 + i as f64, 0.05 * i as f64)).collect();
+        let mut line: Vec<(f64, f64)> = ramp.iter().map(|&(c, r)| (c, wrap(r))).collect();
+        assert!(line.iter().any(|r| r.1 < 0.0));
+        unwrap_offsets(&mut line);
+        assert!(line.iter().zip(&ramp).all(|(a, b)| (a.1 - b.1).abs() < 1e-9));
+        // A long run continues the previous long run across a gap; a short run
+        // (two windows of noise) neither moves nor carries the reference.
+        let mut line = vec![(14.0, 0.85), (15.0, 0.8)];
+        line.extend((0..10).map(|i| (40.0 + i as f64, 0.6 + 0.03 * i as f64)));
+        line.extend((0..10).map(|i| (60.0 + i as f64, wrap(1.1 + 0.03 * i as f64))));
+        unwrap_offsets(&mut line);
+        assert_eq!(&line[..2], &[(14.0, 0.85), (15.0, 0.8)]);
+        assert!((line[2].1 - 0.6).abs() < 1e-9 && (line[21].1 - 1.37).abs() < 1e-9, "{line:?}");
     }
 
     #[test]
