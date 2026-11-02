@@ -1,9 +1,9 @@
 // The decoder's floor: tiles read per pixels-per-module and blur, on frames of a
 // real sender projected through the synthetic camera (tools/sim). Eight frames per
 // cell on a fresh receiver, 1920×1080, a slight tilt, sensor noise σ 6. Prints the
-// share of tiles read, the stage most frames stopped at when not all were read,
-// and the module size the receiver itself measured (the tilt makes it smaller than
-// the nominal value; it is what the ⓘ sheet calls Module). Run it before and after
+// share of tiles read, the stage the failing frames stopped at, and the module size
+// the receiver itself measured (what the ⓘ sheet calls Module; the tilt and the
+// 119-module grid make it a little smaller than nominal). Run it before and after
 // a change to crates/diodecam-vision.
 //
 // usage: node tools/floor.ts [cols = 120] [rows = 40]   (needs target/debug/diodecam and web/diodecam.wasm)
@@ -50,21 +50,26 @@ try {
       const measured: number[] = []
       const stages: Record<string, number> = {}
       for (const [i, screen] of screens.entries()) {
-        // The screen is 8 px per cell, one module per cell across: fill so that a module lands on `px` camera pixels.
-        const fill = Math.min(0.95, (px * screen.width) / (8 * camera.width))
+        // The screen is 8 px per cell, one module per cell across. framing() fits the screen to the
+        // frame's width or, for a tall terminal, its height: `span` is the screen's width at fill 1.
+        const span = Math.min(camera.width, camera.height * (screen.width / screen.height))
+        const fill = Math.min(0.95, (px * screen.width) / (8 * span))
         const corners = framing(camera.width, camera.height, screen.width / screen.height, fill, 0.03)
         const shot = cameraView(screen, { ...camera, corners, blur, noise: 6, levels: [30, 220], seed: i + 1 })
         const r = rx.process(toRgba(shot), shot.width, shot.height)
         const s = rx.stats()
-        const stage = s.stage ?? 'none'
-        stages[stage] = (stages[stage] ?? 0) + 1
+        if (r < header.tiles) {
+          const stage = s.stage ?? 'none'
+          stages[stage] = (stages[stage] ?? 0) + 1
+        }
         if (r >= 0) {
           ok += r
-          measured.push(moduleSize(s.corners, s.grid) ?? 0)
+          const m = moduleSize(s.corners, s.grid)
+          if (m !== null) measured.push(m)
         }
       }
       const pct = Math.round((ok / (FRAMES * header.tiles)) * 100)
-      const stuck = Object.entries(stages).sort((a, b) => b[1] - a[1])[0]![0]
+      const stuck = Object.entries(stages).sort((a, b) => b[1] - a[1])[0]?.[0] ?? ''
       const m = measured.length ? (measured.reduce((a, b) => a + b, 0) / measured.length).toFixed(1) : '—'
       row += `${pct}%`.padStart(5) + ` ${pct === 100 ? '' : stuck}`.padEnd(9) + m.padStart(4)
     }

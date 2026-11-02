@@ -126,14 +126,15 @@ fn perspective_and_rotation() {
         ("roll 180 (upside down)", Case { roll: 180.0, ..base }),
         ("120x40 close-up", Case { cols: 120, rows: 40, fill: 0.95, ..base }),
         ("720p far (3.5 px modules)", Case { camera: (1280, 720), fill: 0.55, blur: 0, ..base }),
+        // Small modules need the small-window pass, which the first frame must run too.
+        ("1080p far (3.3 px modules)", Case { camera: (1920, 1080), cols: 120, rows: 40, fill: 0.25, blur: 0, ..base }),
     ];
     for (name, case) in cases {
         let out = film(&case, 4);
         report(name, &out);
-        // Acquisition may take a second frame (the full search alternates its
-        // fallback passes); from then on every frame must decode.
+        // The first frame must decode: the full search runs every pass on its first miss.
         let first = out.iter().position(|o| o.format_ok).unwrap_or(out.len());
-        assert!(first <= 1, "{name}: first detection in frame {first}");
+        assert_eq!(first, 0, "{name}: first detection in frame {first}");
         let after = &out[first..];
         let (mer, pass, wrong, det) = summary(after);
         assert_eq!(det, after.len(), "{name}");
