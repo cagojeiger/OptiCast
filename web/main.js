@@ -315,7 +315,7 @@ function drawOverlay(s) {
   if (!c || c.some((v) => v === null)) return
   const line = Math.max(3, overlay.width / 300)
   const ok = s.tiles.total ? s.tiles.ok / s.tiles.total : 0
-  overlayCtx.strokeStyle = ok >= 0.7 ? '#3ddc97' : ok > 0 ? '#f5a524' : '#f2555a'
+  overlayCtx.strokeStyle = ok >= 0.7 ? '#34d399' : ok > 0 ? '#fbbf24' : '#f87171'
   overlayCtx.lineWidth = line
   overlayCtx.beginPath()
   for (let i = 0; i < 4; i++) overlayCtx.lineTo(c[i * 2] ?? 0, c[i * 2 + 1] ?? 0)
@@ -330,7 +330,7 @@ function drawOverlay(s) {
     const x = centers[2 * n]
     const y = centers[2 * n + 1]
     if (x == null || y == null) continue
-    overlayCtx.fillStyle = s.tile_status[n] === '1' ? '#3ddc97' : '#f2555a'
+    overlayCtx.fillStyle = s.tile_status[n] === '1' ? '#34d399' : '#f87171'
     overlayCtx.beginPath()
     overlayCtx.arc(x, y, line * 2.5, 0, Math.PI * 2)
     overlayCtx.fill()

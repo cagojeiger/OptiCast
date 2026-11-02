@@ -2,13 +2,15 @@
 
 ## 구조
 
+crate는 책임 단위다. 쓰는 곳의 수나 크기를 이유로 합치지 않는다.
+
 ```
-crates/diodecam-core/    배치·타일·RS·RaptorQ·META·ANSI·수신 조립 (I/O 없음, wasm32 빌드)
-crates/diodecam-cli/     diodecam 바이너리 (docs/cli.md)
-crates/diodecam-vision/  카메라 영상에서 격자 검출과 샘플링 (docs/web.md 7절)
-crates/diodecam-wasm/    vision + core 를 C ABI wasm 으로
-crates/diodecam-sim/     테스트용 래스터라이저와 가상 카메라
-web/                     수신 페이지 (docs/web.md)
+crates/diodecam-core/    화면 형식(배치·타일·RS·RaptorQ·META·ANSI), 송신 일정, 수신 조립. I/O·시계·카메라를 모른다. wasm32 빌드
+crates/diodecam-cli/     송신 바이너리: 인자, 파일, 터미널, 키, 상태 줄 (docs/cli.md). 영상 처리·브라우저를 모른다
+crates/diodecam-vision/  회색조 카메라 영상 → 모듈 격자 (docs/web.md 7절). 타일·조립·ABI를 모른다
+crates/diodecam-wasm/    배선: vision + core Assembler 수신 세션, 통계 JSON, 이어 받기, C ABI
+crates/diodecam-sim/     테스트 전용 가상 터미널·카메라. 시험 대상인 vision과 코드를 공유하지 않는다
+web/                     수신 페이지 (docs/web.md, DESIGN.md)
 tools/                   wasm 빌드, 로컬 서버, e2e 와 시뮬레이터
 test/                    receiver.test.ts (node:test)
 ```

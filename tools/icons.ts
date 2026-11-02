@@ -7,8 +7,8 @@
 import { writeFileSync } from 'node:fs'
 import { crc32, deflateSync } from 'node:zlib'
 
-const BG = [0x0b, 0x0d, 0x10]
-const FG = [0x3d, 0xdc, 0x97]
+const BG = [0x17, 0x17, 0x17]
+const FG = [0x34, 0xd3, 0x99]
 const SPAN = 17 // modules: finder 7 + gap 3 + finder 7
 
 /** Module (x, y) of the 17×17 motif is lit. */

@@ -51,6 +51,7 @@ SSH 터미널에 그린 흑백 격자를 폰 카메라로 찍어 파일을 옮�
 | [`docs/web.md`](docs/web.md) | 수신기: 화면, 안내, 저장·이어 받기, 홈 화면 앱, 진단, 영상 처리 |
 | [`docs/protocol.md`](docs/protocol.md) | 송신기와 수신기가 함께 지키는 화면 형식 |
 | [`docs/development.md`](docs/development.md) | 빌드, 테스트, e2e, 배포, 릴리스 |
+| [`DESIGN.md`](DESIGN.md) | 화면 원칙, 토큰 역할, 상태별 동작 (영어) |
 | [`docs/adr/`](docs/adr/README.md) | 왜 이렇게 만들었나 |
 
 ## 안전 경계
