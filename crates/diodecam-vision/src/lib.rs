@@ -123,6 +123,8 @@ pub struct Vision {
     bitmap: Bitmap,
     sampler: Sampler,
     cands: Vec<Candidate>,
+    /// Candidates of every full-search pass of this frame, merged.
+    seen: Vec<Candidate>,
     track: Option<Track>,
     stage: Option<Stage>,
     no_correction: bool,
@@ -240,6 +242,8 @@ impl Vision {
         let passes = [((long / 40).max(15), true), ((long / 16).max(15), true), ((long / 96).max(15), false)];
         let fallback = 1 + (self.misses % 2) as usize;
         let first = self.misses == 0;
+        let mut tried: Vec<Triple> = Vec::new();
+        self.seen.clear();
         for (_, (window, smooth)) in passes.into_iter().enumerate().filter(|&(p, _)| p == 0 || p == fallback || first) {
             self.cands.clear();
             let all = Rect { x0: 0, y0: 0, x1: width, y1: height };
@@ -251,6 +255,23 @@ impl Vision {
                     self.skipped = false;
                     return Some(d);
                 }
+                tried.push(t);
+            }
+            for &c in &self.cands {
+                finder::merge(&mut self.seen, c);
+            }
+        }
+        // A view turned far enough puts finders of very different sizes in one
+        // frame: the near one only shows in a large window, the far ones only in
+        // the small one on raw pixels. Try the triples that combine the passes.
+        let same = |a: &Candidate, b: &Candidate| a.pos().dist(b.pos()) <= a.module();
+        for t in finder::triples(&self.seen, 6) {
+            if tried.iter().any(|u| same(&u.tl, &t.tl) && same(&u.tr, &t.tr) && same(&u.bl, &t.bl)) {
+                continue;
+            }
+            if let Some(d) = self.decode(&img, t, false) {
+                self.misses = 0;
+                return Some(d);
             }
         }
         self.misses += 1;
