@@ -679,7 +679,8 @@ html[data-view='receiver'] #setup {
   box-sizing: border-box;
   padding: 28px 32px 16px;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-areas: 'head' 'grid' 'fold' 'foot';
   gap: 16px;
   max-width: 1200px;
   margin: 0 auto;
@@ -688,6 +689,7 @@ html[data-view='receiver'] #setup {
 }
 
 .setup-head {
+  grid-area: head;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -710,6 +712,7 @@ html[data-view='receiver'] #setup {
 }
 
 .setup-grid {
+  grid-area: grid;
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
@@ -857,6 +860,7 @@ html[data-view='receiver'] #setup {
 
 /* The fold stays one line closed; open, it scrolls inside its own box. */
 .fold {
+  grid-area: fold;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--bg);
@@ -891,6 +895,8 @@ html[data-view='receiver'] #setup {
 }
 
 .setup-foot {
+  grid-area: foot;
+  align-self: end;
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
