@@ -172,8 +172,21 @@ let wakeLock = null
 
 /** @returns {Session} Diagnostics since the camera started (docs/web.md §6). */
 function newSession() {
-  return { started: performance.now(), frames: 0, stages: {}, detections: 0, tracked: 0, corrected: 0, modules: [], residuals: [] }
+  return {
+    started: performance.now(),
+    frames: 0,
+    stages: {},
+    detections: 0,
+    tracked: 0,
+    corrected: 0,
+    modules: [],
+    residuals: [],
+    lastFrame: null,
+    gaps: { count: 0, ms: 0, longest: 0, last: [] },
+  }
 }
+/** No camera frame for longer than this is a gap in the session's record. */
+const GAP_MS = 500
 let session = newSession()
 
 /** @param {string} d */
@@ -210,6 +223,15 @@ function onFrame(now, gen) {
   try {
     captureTimes.push(now)
     captureTimes = captureTimes.filter((t) => t > now - 2000)
+    const gap = session.lastFrame === null ? 0 : now - session.lastFrame
+    if (gap > GAP_MS) {
+      const g = session.gaps
+      g.count++
+      g.ms += gap
+      g.longest = Math.max(g.longest, gap)
+      g.last = [...g.last.slice(-9), { at: now - gap, ms: gap }]
+    }
+    session.lastFrame = now
     if (!busy) grab(now)
   } catch (err) {
     workerError = `Could not read a frame: ${/** @type {Error} */ (err).message}`
@@ -368,8 +390,12 @@ const START_ICON = { Start: 'M7 4l13 8-13 8z', Stop: 'M5 5h14v14H5z', Reload: 'M
 
 function render() {
   const s = last
-  const capture = fps(captureTimes)
-  const processed = fps(resultTimes)
+  // The windows end now, not at the newest sample: when frames stop (a rotation, a taken
+  // camera), the recent numbers go blank instead of freezing at their last values.
+  const now = performance.now()
+  const recent = trim(frames, 2000, now)
+  const capture = fps(captureTimes.filter((t) => t > now - 2000))
+  const processed = fps(resultTimes.filter((t) => t > now - 2000))
   const setFps = settings.frameRate ? Math.round(settings.frameRate) : null
   stat.capture.textContent = scanning
     ? `${capture === null ? '—' : Math.round(capture)} fps${setFps ? ` (set ${setFps})` : ''}`
@@ -380,13 +406,13 @@ function render() {
   stat.lens.textContent = lens || '—'
   stat.process.textContent = processed === null ? '—' : `${Math.round(processed)} fps`
   stat.ms.textContent = decodeMs ? `${decodeMs.toFixed(1)} ms` : '—'
-  const rate = recognition(frames)
+  const rate = recognition(recent)
   stat.recognition.textContent = rate === null ? '—' : `${Math.round(rate * 100)}%`
   stat.grid.textContent = s?.grid ? `${s.grid.w}×${s.grid.h} ${s.grid.profile}` : '—'
-  const module = quantile(frames.map((f) => f.module), 0.5)
+  const module = quantile(recent.map((f) => f.module), 0.5)
   stat.module.textContent = module === null ? '—' : `${module.toFixed(1)} px`
-  const failed = failure(frames)
-  stat.stage.textContent = failed ? `${STAGE_TEXT[failed.stage]} ${Math.round(failed.share * 100)}%` : frames.length && scanning ? 'nothing' : '—'
+  const failed = failure(recent)
+  stat.stage.textContent = failed ? `${STAGE_TEXT[failed.stage]} ${Math.round(failed.share * 100)}%` : recent.length && scanning ? 'nothing' : '—'
   stat.foreign.textContent = s ? thousands(s.foreign) : '0'
   summaryEl.textContent = scanning
     ? [rate === null ? '' : `${Math.round(rate * 100)}% read`, module === null ? '' : `${module.toFixed(1)} px`, capture === null ? '' : `${Math.round(capture)} fps`]
@@ -396,7 +422,7 @@ function render() {
 
   const need = s?.symbols.need ?? null
   const have = s?.symbols.have ?? 0
-  const left = eta(have, need, symbolRate(progress))
+  const left = eta(have, need, symbolRate(trim(progress, 5000, now)))
   stat.eta.textContent = left === null ? '—' : formatSeconds(left)
 
   // File row: the transfer on screen, else the kept file, else nothing.
@@ -426,8 +452,8 @@ function render() {
     workerError,
     rate,
     left,
-    hint: hint(frames, video.videoHeight > video.videoWidth),
-    gridSeen: frames.some((f) => f.grid),
+    hint: hint(recent, video.videoHeight > video.videoWidth),
+    gridSeen: recent.some((f) => f.grid),
   })
 
   // Progress bar, ring and tick.
@@ -710,7 +736,7 @@ function snapshot() {
     manualCamera: readCamera() !== '',
     video: { width: video.videoWidth, height: video.videoHeight },
     scan: { width: scanCanvas.width, height: scanCanvas.height },
-    settings,
+    settings: track?.getSettings() ?? settings,
     capabilities: track?.getCapabilities?.() ?? null,
     session,
     scanning,
@@ -872,6 +898,13 @@ $('send-link').addEventListener('click', () => {
   const url = location.origin + location.pathname
   if (navigator.share) navigator.share({ title: 'DiodeCam', text: 'DiodeCam setup and sender downloads', url }).catch(() => {})
   else navigator.clipboard?.writeText(url).catch(() => {})
+})
+// Turning the phone swaps the camera's width and height: read the track's settings again, so the
+// stats and diagnostics never pair the new picture with the old size. The camera is not restarted.
+video.addEventListener('resize', () => {
+  const track = stream?.getVideoTracks()[0]
+  if (track) settings = track.getSettings()
+  queueRender()
 })
 cameraSelect.addEventListener('change', () => {
   writeCamera(cameraSelect.value)

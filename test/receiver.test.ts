@@ -13,7 +13,7 @@ import { randomBytes, senderFrames } from '../tools/sim/sender.ts'
 import { VTerm } from '../tools/sim/vterm.ts'
 import { MIN_MODULE_PX, captureWidth, eta, failure, formatBytes, formatSeconds, fps, hint, limitMib, moduleSize, quantile, recognition, safeName, scanWidth, symbolRate, tooLargeText, trim, type FrameSample, type Stage } from '../web/metrics.js'
 import { evictable, exportTiles, keepable, shouldSave, type KeptFile, type SavedMeta } from '../web/store.js'
-import { diagnostics, view, type View, type ViewState } from '../web/view.js'
+import { diagnostics, view, type DiagnosticsSnapshot, type View, type ViewState } from '../web/view.js'
 import { OUT_OF_MEMORY, WasmReceiver, type ReceiverStats } from '../web/wasm.js'
 
 const frame = (t: number, tilesOk: number, tiles = 10, grid = true): FrameSample => ({ t, grid, tilesOk, tiles })
@@ -29,6 +29,12 @@ describe('metrics', () => {
       [1000, 2600, 3000],
     )
     assert.deepEqual(trim([], 2000), [])
+    // Read on the clock: the window ends now, and empties once samples stop coming.
+    assert.deepEqual(
+      trim(s, 2000, 4000).map((f) => f.t),
+      [2600, 3000],
+    )
+    assert.deepEqual(trim(s, 2000, 10_000), [])
   })
 
   it('recognition is tiles passed over tiles tried', () => {
@@ -185,68 +191,90 @@ describe('view', () => {
     assert.equal(view(state({ offer: offer(), stats: stats(50, 100) })).fraction, 1, 'a kept file fills the bar')
   })
 
-  it('diagnostics never carry the file name, size, content, transfer id or device ids', () => {
-    const name = 'quarterly-secret-report.pdf'
-    const size = 987_654_321
-    const id = 'c0ffee42'
-    const content = new TextEncoder().encode('TOP-SECRET-CONTENT')
-    const devices = { deviceId: 'device-5a1b2c3d', groupId: 'group-9e8f7a6b' }
-    const decoder: ReceiverStats = {
+  // A snapshot as main.js builds it, holding what must never be copied: the decoder's answer names
+  // the file, and the camera settings carry device ids.
+  const secret = { name: 'quarterly-secret-report.pdf', size: 987_654_321, id: 'c0ffee42', content: new TextEncoder().encode('TOP-SECRET-CONTENT') }
+  const devices = { deviceId: 'device-5a1b2c3d', groupId: 'group-9e8f7a6b' }
+  const decoder: ReceiverStats = {
+    frames: 90,
+    detected: true,
+    stage: 'done',
+    grid: { w: 119, h: 76, profile: 'ssh' },
+    corners: [10, 10, 410, 10, 410, 310, 10, 310],
+    tiles: { ok: 9, total: 10 },
+    totals: { frames: 90, detections: 80, tiles_ok: 700, tiles: 800 },
+    symbols: { have: 400, need: 1000 },
+    meta: { name: secret.name, size: secret.size, id: secret.id, compression: 'zstd' },
+    limit: 64 * 2 ** 20,
+    too_large: { id: secret.id, size: secret.size },
+    too_large_count: 1,
+    foreign: 0,
+    duplicates: 3,
+    invalid: 0,
+    failed: 0,
+    done: false,
+    error: null,
+    kept: 400,
+    tile_status: '1111111110',
+  }
+  const snapshot = (over: Partial<DiagnosticsSnapshot> = {}) => ({
+    app: 'DiodeCam test',
+    at: '2026-11-02T00:00:00.000Z',
+    now: 10_000,
+    agent: 'test agent',
+    standalone: false,
+    viewport: '390×844 @3x',
+    lens: 'Back Camera',
+    manualCamera: true,
+    video: { width: 1920, height: 1080 },
+    scan: { width: 1920, height: 1080 },
+    settings: { ...devices, width: 1920, height: 1080, frameRate: 30 },
+    capabilities: { ...devices, width: { min: 1, max: 4032 } },
+    session: {
+      started: 0,
       frames: 90,
-      detected: true,
-      stage: 'done',
-      grid: { w: 119, h: 76, profile: 'ssh' },
-      corners: [10, 10, 410, 10, 410, 310, 10, 310],
-      tiles: { ok: 9, total: 10 },
-      totals: { frames: 90, detections: 80, tiles_ok: 700, tiles: 800 },
-      symbols: { have: 400, need: 1000 },
-      meta: { name, size, id, compression: 'zstd' },
-      limit: 64 * 2 ** 20,
-      too_large: { id, size },
-      too_large_count: 1,
-      foreign: 0,
-      duplicates: 3,
-      invalid: 0,
-      failed: 0,
-      done: false,
-      error: null,
-      kept: 400,
-      tile_status: '1111111110',
-    }
-    const snapshot = {
-      app: 'DiodeCam test',
-      at: '2026-11-02T00:00:00.000Z',
-      now: 10_000,
-      agent: 'test agent',
-      standalone: false,
-      viewport: '390×844 @3x',
-      lens: 'Back Camera',
-      manualCamera: true,
-      video: { width: 1920, height: 1080 },
-      scan: { width: 1920, height: 1080 },
-      settings: { ...devices, width: 1920, height: 1080, frameRate: 30 },
-      capabilities: { ...devices, width: { min: 1, max: 4032 } },
-      session: { started: 0, frames: 90, stages: { done: 80, finders: 10 }, detections: 80, tracked: 70, corrected: 5, modules: [7.5, 7.7], residuals: [0.05] },
-      scanning: true,
-      frames: [frame(9000, 9), frame(9500, 8)],
-      captureTimes: [9000, 9033, 9066, 9100, 9133, 9166, 9200, 9233, 9266, 9300, 9333],
-      resultTimes: [9000, 9500],
-      decodeMs: 12.34,
-      stats: decoder,
-      // More of what the page holds; a snapshot never has it, and it would not be copied if it did.
-      file: content,
-      offer: { name, size, id },
-    }
-    const copied = diagnostics(snapshot)
+      stages: { done: 80, finders: 10 },
+      detections: 80,
+      tracked: 70,
+      corrected: 5,
+      modules: [7.5, 7.7],
+      residuals: [0.05],
+      lastFrame: 9333,
+      gaps: { count: 1, ms: 800, longest: 800, last: [{ at: 4000, ms: 800 }] },
+    },
+    scanning: true,
+    frames: [frame(9000, 9), frame(9500, 8)],
+    captureTimes: [9000, 9033, 9066, 9100, 9133, 9166, 9200, 9233, 9266, 9300, 9333],
+    resultTimes: [9000, 9500],
+    decodeMs: 12.34,
+    stats: decoder,
+    ...over,
+    // More of what the page holds; a snapshot never has it, and it would not be copied if it did.
+    file: secret.content,
+    offer: { name: secret.name, size: secret.size, id: secret.id },
+  })
+
+  it('diagnostics never carry the file name, size, content, transfer id or device ids', () => {
+    const copied = diagnostics(snapshot())
     const json = JSON.stringify(copied)
+    const { name, size, id, content } = secret
     const secrets = [name, String(size), size.toLocaleString('en-US'), formatBytes(size), id, new TextDecoder().decode(content), JSON.stringify(content).slice(0, 30), devices.deviceId, devices.groupId]
-    for (const secret of secrets) assert.ok(!json.includes(secret), `the diagnostics contain ${secret}`)
+    for (const s of secrets) assert.ok(!json.includes(s), `the diagnostics contain ${s}`)
     // Not vacuous: the camera and recognition numbers are there.
     assert.equal(copied.camera.lens, 'Back Camera')
     assert.deepEqual(copied.camera.settings, { width: 1920, height: 1080, frameRate: 30 })
     assert.deepEqual(copied.transfer, { progress: 0.4, foreign: 0, invalid: 0, failed: 0, done: false })
     assert.deepEqual(copied.grid, { w: 119, h: 76, profile: 'ssh' })
     assert.equal(copied.recent.capture_fps, 30)
+  })
+
+  it('diagnostics windows end when the copy is made, and the gaps show', () => {
+    const live = diagnostics(snapshot())
+    assert.deepEqual(live.recent, { capture_fps: 30, process_fps: 2, decode_ms: 12.3, recognition: 0.85, hint: null, last_frame_ms: 667 })
+    assert.deepEqual(live.session.gaps, { count: 1, total_ms: 800, longest_ms: 800, last: [{ at_s: 4, ms: 800 }] })
+    // Copied 5 s after the frames stopped (a rotation, a taken camera): blank, not the last values.
+    const late = diagnostics(snapshot({ now: 14_333 }))
+    assert.deepEqual(late.recent, { capture_fps: null, process_fps: null, decode_ms: 12.3, recognition: null, hint: null, last_frame_ms: 5000 })
   })
 })
 

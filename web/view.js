@@ -4,7 +4,7 @@
 // they are unit-tested without a browser: main.js gathers the inputs and applies
 // the result to the page.
 
-import { HINT_TEXT, formatSeconds, fps, hint, quantile, recognition, thousands, tooLargeText } from './metrics.js?v=__V__'
+import { HINT_TEXT, formatSeconds, fps, hint, quantile, recognition, thousands, tooLargeText, trim } from './metrics.js?v=__V__'
 
 /** @import { FrameSample, Hint } from './metrics.js' */
 /** @import { ReceiverStats } from './wasm.js' */
@@ -133,6 +133,10 @@ export function view(v) {
  * @property {number} corrected
  * @property {number[]} modules Pixels per module of the grids found (the latest few hundred).
  * @property {number[]} residuals
+ * @property {number | null} lastFrame performance.now() of the newest camera frame.
+ * @property {{ count: number, ms: number, longest: number, last: { at: number, ms: number }[] }} gaps
+ *   Stretches without a camera frame for over 500 ms (a rotation, the camera muted or taken);
+ *   `last` holds the latest ten, `at` being when the frames stopped.
  */
 
 /**
@@ -149,13 +153,13 @@ export function view(v) {
  * @property {boolean} manualCamera A camera was chosen under Stats.
  * @property {{ width: number, height: number }} video
  * @property {{ width: number, height: number }} scan
- * @property {MediaTrackSettings | null} settings
+ * @property {MediaTrackSettings | null} settings Read from the track when taken.
  * @property {MediaTrackCapabilities | null} capabilities
  * @property {Session} session
  * @property {boolean} scanning
- * @property {FrameSample[]} frames
- * @property {number[]} captureTimes
- * @property {number[]} resultTimes
+ * @property {FrameSample[]} frames The recent decoder answers (cut to the last 2 s at `now` here).
+ * @property {number[]} captureTimes Camera frame times (cut likewise).
+ * @property {number[]} resultTimes Decoder answer times (cut likewise).
  * @property {number} decodeMs
  * @property {ReceiverStats | null} stats
  */
@@ -175,9 +179,12 @@ export function diagnostics(d) {
     return x === null ? null : Math.round(x * 100) / 100
   }
   const s = d.stats
-  const rate = recognition(d.frames)
-  const capture = fps(d.captureTimes)
-  const processed = fps(d.resultTimes)
+  // The recent windows end at `now`: copied while frames have stopped, they are empty, not stale.
+  const frames = trim(d.frames, 2000, d.now)
+  const rate = recognition(frames)
+  const capture = fps(d.captureTimes.filter((t) => t > d.now - 2000))
+  const processed = fps(d.resultTimes.filter((t) => t > d.now - 2000))
+  const g = d.session.gaps
   return {
     app: d.app,
     at: d.at,
@@ -201,13 +208,21 @@ export function diagnostics(d) {
       corrected: d.session.corrected,
       module_px: { p10: at(d.session.modules, 0.1), p50: at(d.session.modules, 0.5), p90: at(d.session.modules, 0.9) },
       residual_p50: at(d.session.residuals, 0.5),
+      gaps: {
+        count: g.count,
+        total_ms: Math.round(g.ms),
+        longest_ms: Math.round(g.longest),
+        last: g.last.map((x) => ({ at_s: Math.round((x.at - d.session.started) / 100) / 10, ms: Math.round(x.ms) })),
+      },
     },
     recent: {
       capture_fps: capture && Math.round(capture),
       process_fps: processed && Math.round(processed),
       decode_ms: Math.round(d.decodeMs * 10) / 10,
       recognition: rate === null ? null : Math.round(rate * 1000) / 1000,
-      hint: d.scanning ? hint(d.frames, d.video.height > d.video.width) : null,
+      hint: d.scanning ? hint(frames, d.video.height > d.video.width) : null,
+      // How old these numbers are: a copy made while frames had stopped says so.
+      last_frame_ms: d.session.lastFrame === null ? null : Math.round(d.now - d.session.lastFrame),
     },
     grid: s?.grid ? { w: s.grid.w, h: s.grid.h, profile: s.grid.profile } : null,
     // Progress only: the transfer ID and exact size together could identify the file.
