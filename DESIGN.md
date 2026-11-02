@@ -50,13 +50,13 @@ Phone (portrait, one screen)
 Phone (landscape): camera left, the rest in a 250 px column on the right.
 Sheets (from the bottom): Get the sender · Stats and diagnostics / camera picker.
 
-Desktop (pointer: fine, hover: hover) — one screen: the two cards fill the height to the fold, no page scroll from 1024×700 up; shorter or narrower windows fall back to one scrolling column
+Desktop (pointer: fine, hover: hover) — one screen: the four cards fill the height to the fold, no page scroll from 1024×700 up; shorter or narrower windows fall back to one scrolling column
   head   title · one line · Light / Dark / Auto · GitHub
   left   1 Download             target picker · curl | tar xz · Copy          (the server)
          2 Send                 file field · send command · Copy · keys
   right  3 Open the receiver    QR · add to home screen                     (the phone)
          4 Receive              two sentences
-  below  More (one fold)        air-gapped import · macOS quarantine · keys, folders · offline; scrolls inside
+  below  More (one fold)        air-gapped import · macOS quarantine · storage; open, it takes the flexible row and scrolls inside
   foot   version · uploads nothing · policy note
   footer                 version · "uploads nothing" · policy note
 ```

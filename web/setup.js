@@ -67,6 +67,8 @@
       const t = b.dataset.theme ?? 'auto'
       if (t === 'auto') delete document.documentElement.dataset.theme
       else document.documentElement.dataset.theme = t
+      const dark = t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches)
+      for (const m of document.querySelectorAll('meta[name="theme-color"]')) m.setAttribute('content', dark ? '#171717' : '#ffffff')
       try {
         if (t === 'auto') localStorage.removeItem(THEME_KEY)
         else localStorage.setItem(THEME_KEY, t)

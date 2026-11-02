@@ -46,7 +46,12 @@
   }
 }
 
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
 :root[data-theme='dark'] {
+  color-scheme: dark;
     --bg: #171717;
     --panel: #1f1f1f;
     --surface: #212121;
@@ -742,6 +747,11 @@ html[data-view='receiver'] #setup {
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto auto;
   grid-template-areas: 'head' 'grid' 'fold' 'foot';
+}
+
+/* Open, the fold takes the flexible row instead and scrolls; the cards keep their size. */
+.setup:has(.fold[open]) {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 16px;
   max-width: 1200px;
   margin: 0 auto;
@@ -805,7 +815,7 @@ html[data-view='receiver'] #setup {
 }
 
 /* The cards fill the row; their content keeps its own height, so nothing stretches awkwardly. */
-.setup-grid > .card {
+.setup-col > .card {
   min-height: 0;
   overflow: auto;
 }
@@ -845,10 +855,6 @@ html[data-view='receiver'] #setup {
   display: flex;
   align-items: center;
   gap: 10px;
-}
-
-.qr + h2 {
-  margin-top: 6px;
 }
 
 .step {
@@ -968,7 +974,8 @@ html[data-view='receiver'] #setup {
 /* The fold stays one line closed; open, it scrolls inside its own box. */
 .fold {
   grid-area: fold;
-  max-height: 40dvh;
+  min-height: 0;
+  max-height: 100%;
   overflow-y: auto; /* <details> is not a flex container in Chrome: the fold itself scrolls */
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -1019,7 +1026,7 @@ html[data-view='receiver'] #setup {
 }
 
 /* Short or narrow windows: let the page scroll instead of squeezing. */
-@media (max-height: 680px), (max-width: 860px) {
+@media (max-height: 720px), (max-width: 860px) {
   .setup {
     height: auto;
     min-height: 100dvh;
@@ -1033,7 +1040,7 @@ html[data-view='receiver'] #setup {
     max-height: none;
   }
 
-  .setup-grid > .card {
+  .setup-col > .card {
     overflow: visible;
   }
 }

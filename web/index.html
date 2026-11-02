@@ -22,7 +22,10 @@
         // A chosen theme (light/dark) overrides the system setting; 'auto' or nothing follows it.
         try {
           const theme = localStorage.getItem('diodecam.theme')
-          if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme
+          if (theme === 'light' || theme === 'dark') {
+            document.documentElement.dataset.theme = theme
+            for (const m of document.querySelectorAll('meta[name="theme-color"]')) m.setAttribute('content', theme === 'dark' ? '#171717' : '#ffffff')
+          }
         } catch {}
         const forced = new URLSearchParams(location.search).get('receiver') === '1'
         const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true
@@ -125,7 +128,7 @@
       <pre id="debug" data-testid="debug" hidden></pre>
     </dialog>
 
-    <!-- Desktop view: three steps and one fold (DESIGN.md). No camera here. -->
+    <!-- Desktop view: four steps in two columns and one fold (DESIGN.md). No camera here. -->
     <section id="setup" class="setup" aria-label="How to use">
       <header class="setup-head">
         <h1>DiodeCam</h1>
