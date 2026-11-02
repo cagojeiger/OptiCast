@@ -24,9 +24,10 @@
 //!    shifted towards the neighbours' mean when blur spreads modules.
 //!
 //! The next frame first looks for the finders near their last positions
-//! (tracking) and falls back to the full search. Once [`IDLE_AFTER`] full
-//! searches in a row found nothing, the view is taken as empty and the search
-//! runs only every other frame.
+//! (tracking) and falls back to the full search. Right after a grid of big
+//! modules is lost, the full search first looks for the finders on a half-scale
+//! image. Once [`IDLE_AFTER`] full searches in a row found nothing, the view is
+//! taken as empty and the search runs only every other frame.
 
 #![forbid(unsafe_code)]
 
@@ -129,12 +130,22 @@ pub struct Vision {
     misses: u64,
     /// The last frame was not searched (an empty view searches every other frame).
     skipped: bool,
+    /// Module size of the last detection in pixels (0 before the first).
+    module: f64,
+    /// 2×2 means of the frame, for the half-scale search.
+    half: Vec<u8>,
 }
 
 /// Full searches in a row without a grid after which the view counts as empty
 /// and only every other frame is searched: a grid that appears then is found
 /// at most one frame later, and an empty view costs half.
 const IDLE_AFTER: u64 = 2;
+/// Module size of the last detection, in full-resolution pixels, from which the
+/// search after losing the grid looks for the finders at half scale first. At
+/// half scale the finders are found reliably from ~5.6 px (full resolution) up,
+/// against 2.9 px at full resolution, so the half-scale search is only a first
+/// try: the full-resolution one runs on the same frame when it fails.
+const HALF_SCALE_MODULE: f64 = 6.0;
 
 /// Residual above which the timing-line correction is applied: two to three
 /// times the scatter of the phase measurement on a sharp, flat view. At a few
@@ -163,12 +174,13 @@ impl Vision {
         Vision::default()
     }
 
-    /// Forgets the tracked position and the frames without a grid.
+    /// Forgets the tracked position, the frames without a grid and the last module size.
     pub fn reset(&mut self) {
         self.track = None;
         self.stage = None;
         self.misses = 0;
         self.skipped = false;
+        self.module = 0.0;
     }
 
     /// How far the last [`Vision::process`] call got.
@@ -207,6 +219,16 @@ impl Vision {
             }
             self.track = None;
         }
+        // Right after a grid of big modules was lost (not on the first search, not
+        // in an empty view), the finders at half scale: a quarter of the pixels to
+        // binarize and scan, then decoding at full resolution.
+        if self.module >= HALF_SCALE_MODULE && self.misses < IDLE_AFTER {
+            if let Some(d) = self.search_half(&img) {
+                self.misses = 0;
+                self.skipped = false;
+                return Some(d);
+            }
+        }
         // Full search: the design's window (long side / 40) on 3×3 means, then
         // two fallbacks — a larger window for close-ups whose finder centre is
         // wider than that, and a small one on raw pixels for tiny modules and for
@@ -233,6 +255,34 @@ impl Vision {
         }
         self.misses += 1;
         None
+    }
+
+    /// The design's pass of the full search on 2×2 means of `img`; the triples
+    /// found are scaled back and decoded in `img`.
+    fn search_half(&mut self, img: &GrayImage) -> Option<Detection> {
+        let (w, h) = (img.width / 2, img.height / 2);
+        let mut half = std::mem::take(&mut self.half);
+        half.clear();
+        for y in 0..h {
+            let (a, b) = (&img.data[2 * y * img.width..][..2 * w], &img.data[(2 * y + 1) * img.width..][..2 * w]);
+            half.extend(
+                a.chunks_exact(2)
+                    .zip(b.chunks_exact(2))
+                    .map(|(a, b)| ((a[0] as u32 + a[1] as u32 + b[0] as u32 + b[1] as u32 + 2) / 4) as u8),
+            );
+        }
+        let small = GrayImage { data: &half, width: w, height: h };
+        self.cands.clear();
+        let all = Rect { x0: 0, y0: 0, x1: w, y1: h };
+        self.binarizer.binarize(&small, all, (w.max(h) / 40).max(15) | 1, true, &mut self.bitmap);
+        finder::scan(&small, &self.bitmap, 1, &mut self.cands);
+        // Pixel edges are at integers, so full-resolution coordinates are twice the half-scale ones.
+        let up = |c: Candidate| Candidate { x: 2.0 * c.x, y: 2.0 * c.y, mh: 2.0 * c.mh, mv: 2.0 * c.mv, ..c };
+        let found = finder::triples(&self.cands, 6)
+            .into_iter()
+            .find_map(|t| self.decode(img, Triple { tl: up(t.tl), tr: up(t.tr), bl: up(t.bl) }, false));
+        self.half = half;
+        found
     }
 
     fn reached(&mut self, stage: Stage) {
@@ -333,6 +383,7 @@ impl Vision {
         let long = img.width.max(img.height);
         let window = ((module * 7.0).round() as usize).clamp(15, (long / 8).max(15)) | 1;
         self.track = Some(Track { triple: t, window });
+        self.module = module;
         let (wf, hf) = (w as f64, h as f64);
         Some(Detection {
             format,
