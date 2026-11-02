@@ -57,7 +57,7 @@ jobs:
         run: |
           name=diodecam-${{ matrix.target }}
           mkdir "$name"
-          cp target/${{ matrix.target }}/release/diodecam LICENSE README.md "$name"/
+          cp target/${{ matrix.target }}/release/diodecam LICENSE THIRD_PARTY_LICENSES.md README.md "$name"/
           tar czf "$name.tar.gz" "$name"
           shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256"
       - uses: actions/upload-artifact@v7
