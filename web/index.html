@@ -123,7 +123,7 @@
       <button id="copy" class="wide" data-testid="copy">Copy diagnostics</button>
       <p class="note">
         Diagnostics hold device, camera and recognition numbers only, never the file's name, size or content. Everything
-        runs in this browser; nothing is uploaded.
+        runs in this browser; nothing is uploaded. <a href="./privacy.html">Privacy</a> · <a href="./terms.html">Terms</a> · <a href="./licenses.html">Licenses</a>
       </p>
       <pre id="debug" data-testid="debug" hidden></pre>
     </dialog>
@@ -158,7 +158,10 @@
             <h2><span class="step">2</span>Send</h2>
             <label class="file-field"><span>File to send</span><input id="file-input" type="text" placeholder="e.g. report.pdf" autocomplete="off" spellcheck="false" /></label>
             <div class="code"><pre id="cmd-run">./diodecam-x86_64-unknown-linux-musl/diodecam send &lt;FILE&gt;</pre><button type="button" class="copy" data-copy="cmd-run">Copy</button></div>
-            <p class="muted">The terminal becomes the grid until you press <code>q</code>. Keys: <code>+</code> / <code>-</code> fps · <code>space</code> pause. Folders: <code>tar czf docs.tgz docs/</code> first. A larger window is faster.</p>
+            <figure class="example">
+              <img src="./example-terminal.svg?v=__V__" width="480" height="416" alt="The terminal while sending: a grid of half blocks fills the window, then two status lines" />
+              <figcaption>The terminal turns into this and keeps broadcasting. The bottom line counts <code>phone needs</code> down as the phone reads; press <code>q</code> once the phone says ✓ Received. Keys: <code>+</code> / <code>-</code> fps · <code>space</code> pause. A larger window is faster.</figcaption>
+            </figure>
           </section>
         </div>
 
@@ -198,6 +201,10 @@ tar xzf diodecam-x86_64-unknown-linux-musl.tar.gz</pre><button type="button" cla
       <footer class="setup-foot">
         <span>v0.3.0</span>
         <span>The receiver uploads nothing. Exporting data from an air-gapped network needs your organisation's approval.</span>
+        <span class="grow"></span>
+        <a href="./privacy.html">Privacy</a>
+        <a href="./terms.html">Terms</a>
+        <a href="./licenses.html">Licenses</a>
       </footer>
     </section>
 

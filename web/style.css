@@ -817,7 +817,7 @@ html[data-view='receiver'] #setup {
 /* The cards fill the row; their content keeps its own height, so nothing stretches awkwardly. */
 .setup-col > .card {
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .setup-col {
@@ -1016,6 +1016,55 @@ html[data-view='receiver'] #setup {
   font-weight: 600;
 }
 
+.setup-foot a {
+  color: var(--muted);
+}
+
+.setup-foot .grow {
+  flex-grow: 1;
+}
+
+/* The picture takes whatever height the card has left and shrinks to fit it. */
+.example {
+  margin: 0;
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.example img {
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  max-width: 640px;
+  height: auto;
+  object-fit: contain;
+  object-position: left top;
+}
+
+.example figcaption {
+  flex-shrink: 0;
+}
+
+/* Short card: no room for the picture at a readable size, so the caption carries it alone. */
+.card.send {
+  container-type: size;
+}
+
+@container (max-height: 380px) {
+  .example img {
+    display: none;
+  }
+}
+
+.example figcaption {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
 .setup-foot {
   grid-area: foot;
   display: flex;
@@ -1026,7 +1075,7 @@ html[data-view='receiver'] #setup {
 }
 
 /* Short or narrow windows: let the page scroll instead of squeezing. */
-@media (max-height: 720px), (max-width: 860px) {
+@media (max-height: 680px), (max-width: 860px) {
   .setup {
     height: auto;
     min-height: 100dvh;
@@ -1043,6 +1092,16 @@ html[data-view='receiver'] #setup {
   .setup-col > .card {
     overflow: visible;
   }
+
+  .card.send {
+    container-type: normal;
+  }
+
+  .example img {
+    display: block;
+    flex: none;
+    height: auto;
+  }
 }
 
 @media (max-width: 720px) {
@@ -1056,4 +1115,85 @@ html[data-view='receiver'] #setup {
     /* The forced receiver on a desktop: phone proportions, not a wall of camera. */
     max-width: 480px;
   }
+}
+
+/* --- policy pages (privacy, terms, licenses) ------------------------------------------- */
+
+body.doc {
+  padding: 0 16px;
+}
+
+main.doc {
+  height: auto;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 0 48px;
+  display: block;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+main.doc .crumbs {
+  margin: 0 0 24px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+main.doc .crumbs a,
+main.doc a {
+  color: var(--link);
+}
+
+main.doc h1 {
+  font-size: 26px;
+  font-weight: 600;
+  margin: 0 0 8px;
+  white-space: normal;
+}
+
+main.doc .lede {
+  margin: 0 0 24px;
+  font-size: 17px;
+  color: var(--text-2);
+}
+
+main.doc h2 {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 28px 0 8px;
+}
+
+main.doc p,
+main.doc li {
+  margin: 0 0 8px;
+  color: var(--text-2);
+}
+
+main.doc ul {
+  margin: 0 0 8px;
+  padding-left: 20px;
+}
+
+main.doc code {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+
+main.doc .licenses {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+main.doc .licenses th,
+main.doc .licenses td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+main.doc .muted {
+  color: var(--muted);
+  font-size: 13px;
 }

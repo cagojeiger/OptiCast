@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>DiodeCam · Privacy</title>
+    <link rel="icon" href="./icon.svg?v=__V__" type="image/svg+xml" />
+    <link rel="stylesheet" href="./style.css?v=__V__" />
+    <script>
+      try {
+        const t = localStorage.getItem('diodecam.theme')
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t
+      } catch {}
+    </script>
+  </head>
+  <body class="doc">
+    <main class="doc">
+      <p class="crumbs"><a href="./">DiodeCam</a> · Privacy</p>
+      <h1>Privacy</h1>
+      <p class="lede">DiodeCam has no server of its own. Nothing you send or receive leaves your devices.</p>
+
+      <h2>What the receiver page does with data</h2>
+      <ul>
+        <li><b>Camera.</b> Frames are decoded in your browser, in a Web Worker, and discarded. No frame is stored or transmitted.</li>
+        <li><b>The received file.</b> It is rebuilt in memory and kept in this browser's storage (IndexedDB) until you share it, receive the next file, press Reset, or 24 hours pass. It is never opened or uploaded; it is saved only when you tap Share or Download.</li>
+        <li><b>Progress.</b> Pieces of an unfinished transfer are kept in IndexedDB for up to 7 days (128 MiB in total) so a closed tab can resume. Reset deletes them.</li>
+        <li><b>Preferences.</b> The chosen camera, theme and download target are kept in localStorage. Clearing site data removes everything above.</li>
+        <li><b>Diagnostics.</b> "Copy diagnostics" puts device, camera and recognition numbers on your clipboard, for you to paste where you choose. It never includes the file's name, size or content, the transfer ID, or device identifiers.</li>
+      </ul>
+
+      <h2>What the page does not do</h2>
+      <ul>
+        <li>No analytics, no cookies, no third-party scripts or fonts. The page loads only its own files.</li>
+        <li>No account, no sign-in.</li>
+        <li>No network request after the page and its files are loaded. Added to the home screen, it works offline.</li>
+      </ul>
+
+      <h2>Hosting</h2>
+      <p>The page is static and served by GitHub Pages. GitHub may keep ordinary web-server logs (such as your IP address and the time of the request) under <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy statement</a>. Download links for the sender point at GitHub Releases, which is subject to the same statement.</p>
+
+      <h2>The sender</h2>
+      <p>The <code>diodecam</code> command reads only the file you name and draws it in the terminal. It makes no network connection and writes nothing except to the screen.</p>
+
+      <h2>Storage origin</h2>
+      <p>Browser storage is shared by every site on the same origin. While the page is served from <code>*.github.io</code>, other GitHub Pages sites of the same account could read it; that is why the received file is kept for a day at most and dropped once shared. A dedicated domain removes this sharing.</p>
+
+      <p class="muted">Last reviewed 2026-11-02 · <a href="./terms.html">Terms</a> · <a href="./licenses.html">Licenses</a></p>
+    </main>
+  </body>
+</html>

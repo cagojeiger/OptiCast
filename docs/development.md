@@ -26,6 +26,7 @@ pnpm wasm && pnpm test                 # web/diodecam.wasm 빌드 후 JS 테스�
 pnpm serve                             # http://localhost:5173 에서 수신기 (오프라인 캐시 없음: sw.js는 배포본에서만)
 node tools/icons.ts                    # web/icon.svg 와 icon-*.png 다시 만들기
 node tools/qr.ts                       # web/qr.svg (수신기 주소 QR, 데스크톱 설정 페이지용) 다시 만들기
+node tools/terminal-example.ts         # web/example-terminal.svg (설정 페이지의 송신 화면 예시, 실제 프레임) 다시 만들기
 ```
 
 rustup 기본 툴체인이 x86_64인 Mac에서는 cargo 앞에 `RUSTUP_TOOLCHAIN=stable-aarch64-apple-darwin
