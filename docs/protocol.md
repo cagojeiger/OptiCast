@@ -1,7 +1,7 @@
 # DiodeCam protocol: screen format
 
 This is the bit-level specification that the sender (terminal) and the receiver (phone) must both follow. Sender behavior is in [`cli.md`](cli.md),
-receiver behavior is in [`web.md`](web.md), and the reasons for the decisions are in [`adr/`](adr/README.md).
+receiver behavior is in [`web.md`](web.md), and the design reasons are in [`development.md`](development.md#design-reasons).
 All integers are big-endian. A "module" is one dot of the screen grid. Value 1 is the terminal foreground color and 0 is the background color.
 
 ## 1. Profiles and grid size
