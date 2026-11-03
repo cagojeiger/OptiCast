@@ -12,7 +12,7 @@ import { cameraView, framing, tear, toRgba } from '../tools/sim/camera.ts'
 import { randomBytes, senderFrames } from '../tools/sim/sender.ts'
 import { VTerm } from '../tools/sim/vterm.ts'
 import { MIN_MODULE_PX, captureWidth, eta, failure, formatBytes, formatSeconds, fps, hint, limitMib, moduleSize, quantile, recognition, safeName, scanWidth, symbolRate, tooLargeText, trim, type FrameSample, type Stage } from '../web/metrics.js'
-import { evictable, exportTiles, keepable, shouldSave, type KeptFile, type SavedMeta } from '../web/store.js'
+import { evictable, exportTiles, keepable, load, remove, save, shouldSave, type KeptFile, type SavedMeta } from '../web/store.js'
 import { diagnostics, view, type DiagnosticsSnapshot, type View, type ViewState } from '../web/view.js'
 import { OUT_OF_MEMORY, WasmReceiver, type ReceiverStats } from '../web/wasm.js'
 
@@ -121,7 +121,7 @@ describe('metrics', () => {
 describe('view', () => {
   const meta = { name: 'a.bin', size: 10, id: 'abcd1234', compression: 'none' }
   const stats = (have: number, need: number | null, done = false): ViewState['stats'] => ({ meta, done, symbols: { have, need }, too_large: null, limit: 64 * 2 ** 20 })
-  const offer = (canShare = true): ViewState['offer'] => ({ saved: false, restored: false, at: 0, canShare })
+  const offer = (canShare = true, over: Partial<NonNullable<ViewState['offer']>> = {}): ViewState['offer'] => ({ saved: false, downloaded: false, restored: false, at: 0, canShare, ...over })
   const state = (over: Partial<ViewState> = {}): ViewState => ({
     scanning: false,
     starting: false,
@@ -155,6 +155,8 @@ describe('view', () => {
       ['paused', state({ stats: stats(40, 100) }), 'idle', ['start', 'reset'], ['start'], false, false],
       ['done, share sheet', state({ offer: offer(), stats: stats(100, 100, true) }), 'done', ['start', 'download', 'share', 'reset'], ['share'], false, true],
       ['done, download only', state({ offer: offer(false) }), 'done', ['start', 'download', 'reset'], ['download'], false, true],
+      ['done, downloaded', state({ offer: offer(false, { downloaded: true }) }), 'done', ['start', 'download', 'reset'], ['download'], false, true],
+      ['done, shared', state({ offer: offer(true, { saved: true }) }), 'done', ['start', 'download', 'share', 'reset'], ['share'], false, true],
       ['error', state({ notice: { text: 'No camera found on this device.', tone: 'bad' } }), 'error', ['start', 'reset'], [], false, false],
       ['error, kept file', state({ notice: { text: 'x', tone: 'bad' }, offer: offer() }), 'error', ['start', 'download', 'share', 'reset'], ['share'], false, false],
       ['camera lost mid-transfer', state({ notice: { text: 'The camera was taken by another app. Start again.', tone: 'bad' }, stats: stats(40, 100) }), 'error', ['start', 'reset'], [], false, false],
@@ -184,6 +186,9 @@ describe('view', () => {
     assert.equal(view(state({ scanning: true, stats: stats(1, 5), hint: 'rotate' })).hint.text, '⚠ Hold the phone sideways for a larger grid')
     assert.equal(view(state({ scanning: true, gridSeen: true })).status.text, 'Grid found. Waiting for the file header…')
     assert.equal(view(state({ offer: offer() })).hint.text, 'Save it, then press q in the terminal')
+    // A download can be cancelled (iOS asks first) and the page cannot tell: only a share counts as saved.
+    assert.equal(view(state({ offer: offer(false, { downloaded: true }) })).hint.text, 'Download started. Check it, then press q in the terminal')
+    assert.equal(view(state({ offer: offer(true, { downloaded: true, saved: true }) })).hint.text, 'Saved. You can start the next file.')
     const error = view(state({ notice: { text: 'No camera found on this device.', tone: 'bad' } }))
     assert.equal(error.strip.extra, 'No camera found on this device.')
     assert.deepEqual(error.status, { text: 'No camera found on this device.', tone: 'bad' })
@@ -191,6 +196,21 @@ describe('view', () => {
     assert.equal(view(state({ scanning: true, stats: stats(1, 5), notice: { text: 'w', tone: 'warn' } })).strip.state, 'receiving')
     assert.equal(view(state({ stats: stats(50, 100) })).fraction, 0.5)
     assert.equal(view(state({ offer: offer(), stats: stats(50, 100) })).fraction, 1, 'a kept file fills the bar')
+  })
+
+  it('stops at 99 % until the file is decoded: RaptorQ may want more than K + 2·Z', () => {
+    for (const have of [1006, 1010]) {
+      const v = view(state({ scanning: true, stats: stats(have, 1006), rate: 0.9, left: 0 }))
+      assert.equal(v.fraction, 0.99, `${have}: fraction`)
+      assert.equal(v.strip.state, 'receiving')
+      assert.equal(v.strip.right, '99%', `${have}: no time left to show`)
+      assert.equal(v.status.text, 'A few more pieces to go', `${have}: status`)
+    }
+    assert.equal(view(state({ stats: stats(1006, 1006) })).strip.right, '99%', 'paused')
+    assert.equal(view(state({ scanning: true, stats: stats(1000, 1006), left: 1.5 })).status.text, '6 pieces to go · about 2 s')
+    // Decoded: full.
+    assert.equal(view(state({ scanning: true, stats: stats(1006, 1006, true) })).fraction, 1)
+    assert.equal(view(state({ scanning: true, stats: stats(1006, 1006, true) })).strip.right, '100%')
   })
 
   // A snapshot as main.js builds it, holding what must never be copied: the decoder's answer names
@@ -441,6 +461,101 @@ describe('resume store', () => {
     assert.equal(shouldSave(saved, 49), false)
     assert.equal(shouldSave(saved, 50), true, 'the same count is saved again (fresh savedAt)')
     assert.equal(shouldSave(saved, 51), true)
+  })
+
+  /**
+   * Just enough IndexedDB for store.js, in memory: every request succeeds in a task of its own,
+   * in the order made, and a transaction completes once its last request has. `slowNextOpen`
+   * delays the next connection, so a transaction asked for later can be created first.
+   */
+  const fakeIndexedDB = () => {
+    const stores = new Map<string, { keyPath?: string; rows: Map<unknown, unknown> }>()
+    const db = {
+      get objectStoreNames() {
+        return Object.assign([...stores.keys()], { contains: (n: string) => stores.has(n) })
+      },
+      createObjectStore: (name: string, o?: { keyPath?: string }) => stores.set(name, { keyPath: o?.keyPath, rows: new Map() }),
+      deleteObjectStore: (name: string) => stores.delete(name),
+      close: () => {},
+      transaction: () => {
+        let open = 0
+        const tx: { oncomplete: (() => void) | null; objectStore?: (name: string) => object } = { oncomplete: null }
+        const request = (run: () => unknown) => {
+          const req: { result: unknown; onsuccess: (() => void) | null } = { result: undefined, onsuccess: null }
+          open++
+          setTimeout(() => {
+            req.result = run()
+            req.onsuccess?.() // may make more requests in this transaction
+            if (--open === 0) setTimeout(() => tx.oncomplete?.())
+          })
+          return req
+        }
+        tx.objectStore = (name: string) => {
+          const s = stores.get(name)!
+          return {
+            get: (k: unknown) => request(() => s.rows.get(k)),
+            getAll: () => request(() => [...s.rows.values()]),
+            put: (v: Record<string, unknown>, k?: unknown) => request(() => void s.rows.set(s.keyPath ? v[s.keyPath] : k, v)),
+            delete: (k: unknown) => request(() => void s.rows.delete(k)),
+            clear: () => request(() => s.rows.clear()),
+          }
+        }
+        return tx
+      },
+    }
+    let upgraded = false
+    let delay = 0
+    return {
+      slowNextOpen: (ms: number) => (delay = ms),
+      open: () => {
+        const req: { result: typeof db; onsuccess: (() => void) | null; onupgradeneeded: ((e: { oldVersion: number }) => void) | null } = { result: db, onsuccess: null, onupgradeneeded: null }
+        setTimeout(() => {
+          if (!upgraded) req.onupgradeneeded?.({ oldVersion: 0 })
+          upgraded = true
+          req.onsuccess?.()
+        }, delay)
+        delay = 0
+        return req
+      },
+    }
+  }
+  const entry = (tiles: number) => ({ id: 'a', name: 'a.bin', size: 1, savedAt: Date.now(), data: exp(tiles) })
+
+  it('decides a save against the entry read in its own transaction', async () => {
+    Object.assign(globalThis, { indexedDB: fakeIndexedDB() })
+    try {
+      assert.equal(await save(entry(5)), true)
+      const seen: (SavedMeta | undefined)[] = []
+      const only = (count: number) => (stored: SavedMeta | undefined) => (seen.push(stored), shouldSave(stored, count))
+      assert.equal(await save(entry(3), { only: only(3) }), false, 'never a smaller export over a saved entry')
+      assert.equal(seen[0]?.tiles, 5)
+      assert.equal((await load('a'))?.tiles, 5)
+      assert.equal(await save(entry(7), { only: only(7) }), true)
+      assert.equal((await load('a'))?.tiles, 7)
+    } finally {
+      Reflect.deleteProperty(globalThis, 'indexedDB')
+    }
+  })
+
+  it('a reset after a save started wins: the save does not bring the entry back', async () => {
+    const idb = fakeIndexedDB()
+    Object.assign(globalThis, { indexedDB: idb })
+    try {
+      let gen = 0
+      await save(entry(5))
+      // main.js saveProgress, then reset() before the save's transaction exists; the reset's
+      // remove even runs first. The check runs inside the save's transaction and sees the bump.
+      const started = gen
+      idb.slowNextOpen(20)
+      const saving = save(entry(9), { only: (stored) => started === gen && shouldSave(stored, 9) })
+      gen++ // reset()
+      const removing = remove('a')
+      assert.equal(await saving, false)
+      await removing
+      assert.equal(await load('a'), undefined)
+    } finally {
+      Reflect.deleteProperty(globalThis, 'indexedDB')
+    }
   })
 
   it('offers the received file for 24 hours at most (the privacy.html promise)', () => {

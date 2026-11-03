@@ -303,9 +303,11 @@ impl Assembler {
         self.payload.is_some() || self.finished
     }
 
-    /// Symbols a receiver should expect to need: K + 2.
+    /// Symbols a receiver should expect to need: K_b + 2 for each of the OTI's Z source
+    /// blocks, K + 2·Z in all (0 for an empty file, which has no blocks). An estimate, not a
+    /// bound: RaptorQ now and then needs a few more.
     pub fn symbols_needed(&self) -> Option<u64> {
-        self.meta.as_ref().map(|m| m.source_symbols() + 2)
+        self.meta.as_ref().map(|m| m.oti().map_or(0, |oti| m.source_symbols() + 2 * u64::from(oti.source_blocks())))
     }
 
     pub fn stats(&self) -> Stats {
@@ -556,6 +558,31 @@ mod tests {
         let (meta, _) = forged(&[1; 5000], sample_meta(5000, Compression::None));
         assert_eq!(Assembler::with_limit(4999).accept(&meta), Accepted::TooLarge);
         assert_eq!(Assembler::with_limit(5000).accept(&meta), Accepted::MetaConfirmed);
+    }
+
+    #[test]
+    fn symbols_needed_is_two_more_than_k_per_block() {
+        let f = 1000 * 96u64; // K = 1000
+        for (z, need) in [(1, 1002), (3, 1006)] {
+            let meta = Meta {
+                oti: raptorq::ObjectTransmissionInformation::new(f, 96, z, 1, 8).serialize(),
+                ..sample_meta(f, Compression::None)
+            };
+            let bytes = meta.to_bytes();
+            let mut rx = Assembler::new();
+            assert_eq!(rx.symbols_needed(), None);
+            assert_eq!(rx.accept(&Tile::meta(Meta::from_bytes(&bytes).unwrap().tag(), bytes)), Accepted::MetaConfirmed);
+            assert_eq!(rx.symbols_needed(), Some(need), "Z = {z}");
+        }
+        // A META from the sender (one block), and an empty file's.
+        let mut t = Transfer::prepare(&[7; 20_000], "a", SendOptions { compress: false }, 0).unwrap();
+        let mut rx = Assembler::new();
+        rx.accept(&t.next_frame_tiles(2)[0]);
+        assert_eq!(rx.symbols_needed(), Some(t.source_symbols() + 2));
+        let mut t = Transfer::prepare(b"", "e", SendOptions::default(), 0).unwrap();
+        let mut rx = Assembler::new();
+        rx.accept(&t.next_frame_tiles(2)[0]);
+        assert_eq!(rx.symbols_needed(), Some(0));
     }
 
     #[test]

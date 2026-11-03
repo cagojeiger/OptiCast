@@ -155,8 +155,9 @@ let notice = null
 const RESTORE_FAILED = { text: 'Could not restore the saved progress. Collecting again; reload to retry.', tone: 'warn' }
 /**
  * The verified file on offer; `restored` when it came back from IndexedDB after a
- * reload, `saved` once downloaded or shared.
- * @type {{ url: string, name: string, file: File, id: string, at: number, restored: boolean, saved: boolean } | null}
+ * reload, `saved` once shared (the share sheet resolves only when the file went somewhere),
+ * `downloaded` once a download was started (which the browser, notably iOS, lets the user cancel).
+ * @type {{ url: string, name: string, file: File, id: string, at: number, restored: boolean, saved: boolean, downloaded: boolean } | null}
  */
 let offer = null
 /** @type {Set<string>} Transfer IDs already looked up in IndexedDB. */
@@ -446,7 +447,7 @@ function render() {
     starting,
     fatal: fatalError,
     notice,
-    offer: offer && { saved: offer.saved, restored: offer.restored, at: offer.at, canShare: navigator.canShare?.({ files: [offer.file] }) ?? false },
+    offer: offer && { saved: offer.saved, downloaded: offer.downloaded, restored: offer.restored, at: offer.at, canShare: navigator.canShare?.({ files: [offer.file] }) ?? false },
     stats: s,
     resumed,
     workerError,
@@ -690,7 +691,7 @@ function finish(file, s) {
 function show(blob, name, id, at, restored) {
   clearOffer()
   const file = new File([blob], name, { type: 'application/octet-stream' })
-  offer = { url: URL.createObjectURL(file), name, file, id, at, restored, saved: false }
+  offer = { url: URL.createObjectURL(file), name, file, id, at, restored, saved: false, downloaded: false }
   queueRender()
 }
 
@@ -712,7 +713,8 @@ async function restoreKept() {
 
 function saveFile() {
   if (!offer) return
-  offer.saved = true
+  // Not `saved`: the page cannot tell whether the download went through, so Reset still asks.
+  offer.downloaded = true
   queueRender()
   const a = document.createElement('a')
   a.href = offer.url
@@ -819,10 +821,11 @@ async function saveProgress(id, tiles, count) {
   if (!id || !meta || meta.id !== id || last?.done || count <= 0) return
   const gen = resetGen
   try {
-    // Never replace a saved entry with a smaller one (an export made while saved tiles were being re-imported).
-    const stored = await store.info(id)
-    if (gen !== resetGen || !store.shouldSave(stored, count)) return
-    await store.save({ id, name: meta.name, size: meta.size, savedAt: Date.now(), data: tiles })
+    // Decided inside the save's own transaction, so a reset's remove cannot come between the check
+    // and the write: nothing after a reset, and never a smaller export over a saved entry (one made
+    // while saved tiles were being re-imported).
+    const entry = { id, name: meta.name, size: meta.size, savedAt: Date.now(), data: tiles }
+    if (!(await store.save(entry, { only: (stored) => gen === resetGen && !last?.done && last?.meta?.id === id && store.shouldSave(stored, count) }))) return
     // The new progress replaced the entry that could not be restored.
     if (notice === RESTORE_FAILED) {
       notice = null
@@ -873,7 +876,7 @@ function reset() {
 startBtn.addEventListener('click', () => (fatalError ? location.reload() : scanning ? (stopCamera(), queueRender()) : void startCamera()))
 // Start over: the collected tiles and the kept file both go.
 resetBtn.addEventListener('click', () => {
-  if (offer && !offer.saved && !confirm('The received file is not saved yet. Discard it?')) return
+  if (offer && !offer.saved && !confirm(offer.downloaded ? 'Discard the received file? Check the download finished first.' : 'The received file is not saved yet. Discard it?')) return
   notice = null
   reset()
   clearOffer()

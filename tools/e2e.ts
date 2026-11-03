@@ -221,11 +221,22 @@ try {
   await download.saveAs(savedPath)
   const received = new Uint8Array(readFileSync(savedPath))
   const identical = received.length === original.length && Buffer.from(received).equals(Buffer.from(original))
+  // A started download is not a saved file (the browser may cancel it): Reset still asks. Dismissed, the file stays.
+  await page.getByTestId('hint').getByText('Download started').waitFor({ timeout: 5000 }).catch(() => {})
+  const hintAfter = (await page.getByTestId('hint').textContent()) ?? ''
+  let asked = ''
+  page.once('dialog', (d) => {
+    asked = d.message()
+    void d.dismiss()
+  })
+  await page.getByTestId('reset').click()
+  const stillAsks = hintAfter.startsWith('Download started') && asked.includes('Discard') && (await page.locator('#download:enabled').count()) === 1
+  console.log(`download hint "${hintAfter}"; reset asks: ${asked ? `"${asked}"` : 'no'}`)
   // The verified file stays until the next one or a reset: a reload offers it again.
   await page.reload()
   const kept = await page.getByTestId('strip').getByText('Received').waitFor({ timeout: 10_000 }).then(() => true, () => false)
   console.log(`reload   kept file offered again: ${kept}`)
-  const ok = identical && kept && errors === 0
+  const ok = identical && stillAsks && kept && errors === 0
   const overall = stats.totals?.tiles ? stats.totals.tiles_ok / stats.totals.tiles : 0
   const avgMs = samples.length ? samples.reduce((a, s) => a + s.ms, 0) / samples.length : 0
   const avgRecognition = samples.length ? samples.reduce((a, s) => a + s.recognition, 0) / samples.length : 0
@@ -237,6 +248,7 @@ try {
     recognition: overall,
     recognitionShown: avgRecognition / 100,
     decodeMs: avgMs,
+    stillAsks,
     kept,
     framesProcessed: stats.totals?.frames,
     detections: stats.totals?.detections,

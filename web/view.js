@@ -16,7 +16,8 @@ import { HINT_TEXT, formatSeconds, fps, hint, quantile, recognition, thousands, 
  * @property {boolean} starting The camera is being opened.
  * @property {string} fatal Why the decoder is gone ('' while it works); only a reload helps.
  * @property {{ text: string, tone: 'warn' | 'bad' } | null} notice What the last action failed on.
- * @property {{ saved: boolean, restored: boolean, at: number, canShare: boolean } | null} offer The verified file on offer.
+ * @property {{ saved: boolean, downloaded: boolean, restored: boolean, at: number, canShare: boolean } | null} offer The verified file on
+ *   offer: `saved` once shared, `downloaded` once a download started (it may have been cancelled).
  * @property {Pick<ReceiverStats, 'meta' | 'done' | 'symbols' | 'too_large' | 'limit'> | null} stats The decoder's last answer.
  * @property {number} resumed Pieces brought back from the saved progress.
  * @property {string} workerError A decoder message that does not stop reception.
@@ -57,7 +58,11 @@ export function view(v) {
   const offer = v.offer
   const need = s?.symbols.need ?? null
   const have = s?.symbols.have ?? 0
-  const fraction = need ? Math.min(1, have / need) : 0
+  // `need` is an estimate (K + 2·Z) and RaptorQ may want a few more: until the file is decoded
+  // the bar stops at 99 %, and a count or time to go past it would read 0.
+  const pastNeed = need !== null && have >= need && !s?.done
+  const left = pastNeed ? null : v.left
+  const fraction = need ? Math.min(s?.done ? 1 : 0.99, have / need) : 0
   const percent = `${Math.floor(fraction * 100)}%`
   const count = `${thousands(have)} / ${need === null ? '?' : thousands(need)}`
   const error = v.notice?.tone === 'bad' || v.fatal !== ''
@@ -74,7 +79,7 @@ export function view(v) {
   } else if (receiving) {
     const read = v.rate === null ? '' : `${Math.round(v.rate * 100)}% read`
     const resumed = v.resumed > 0 ? ` · ${thousands(v.resumed)} resumed` : ''
-    strip = { state: 'receiving', label: '● Receiving', symbols: count, extra: `${read}${resumed}`, right: v.left === null ? percent : `${formatSeconds(v.left)} left` }
+    strip = { state: 'receiving', label: '● Receiving', symbols: count, extra: `${read}${resumed}`, right: left === null ? percent : `${formatSeconds(left)} left` }
   } else {
     const label = v.scanning ? '○ Looking' : s?.meta ? '○ Paused' : '○ Idle'
     strip = { state: 'idle', label, symbols: s?.meta ? count : '', extra: '', right: percent }
@@ -97,7 +102,7 @@ export function view(v) {
   let line
   if (advice) line = { text: `⚠ ${HINT_TEXT[advice]}`, tone: advice === 'faster' ? 'ok' : 'warn' }
   else if (v.workerError) line = { text: v.workerError, tone: 'warn' }
-  else if (done) line = { text: offer?.saved ? 'Saved. You can start the next file.' : 'Save it, then press q in the terminal', tone: '' }
+  else if (done) line = { text: offer?.saved ? 'Saved. You can start the next file.' : offer?.downloaded ? 'Download started. Check it, then press q in the terminal' : 'Save it, then press q in the terminal', tone: '' }
   else line = { text: v.resumed > 0 ? `${thousands(v.resumed)} pieces resumed from the last session` : 'Share · Save turns on when the file is complete', tone: '' }
 
   // The line over the camera: the one with the highest priority (docs/web.md §2).
@@ -117,7 +122,7 @@ export function view(v) {
         : 'Start the camera and frame the whole sender screen'
     status = { text, tone: '' }
   } else if (!s?.meta) status = { text: v.gridSeen ? 'Grid found. Waiting for the file header…' : 'Frame the whole sender screen', tone: '' }
-  else status = { text: `${thousands(Math.max(0, (need ?? 0) - have))} pieces to go${v.left === null ? '' : ` · about ${formatSeconds(v.left)}`}`, tone: '' }
+  else status = { text: `${pastNeed ? 'A few more pieces to go' : `${thousands(Math.max(0, (need ?? 0) - have))} pieces to go`}${left === null ? '' : ` · about ${formatSeconds(left)}`}`, tone: '' }
 
   return { strip, status, hint: line, buttons, fraction: done ? 1 : fraction, complete: done, ring: receiving, tick: done, prompt: !done }
 }
@@ -228,7 +233,7 @@ export function diagnostics(d) {
     grid: s?.grid ? { w: s.grid.w, h: s.grid.h, profile: s.grid.profile } : null,
     // Progress only: the transfer ID and exact size together could identify the file.
     transfer: s?.meta
-      ? { progress: Math.round((s.symbols.have / (s.symbols.need || 1)) * 100) / 100, foreign: s.foreign, invalid: s.invalid, failed: s.failed, done: s.done }
+      ? { progress: s.done ? 1 : Math.round((s.symbols.have / (s.symbols.need || 1)) * 100) / 100, foreign: s.foreign, invalid: s.invalid, failed: s.failed, done: s.done }
       : null,
   }
 }

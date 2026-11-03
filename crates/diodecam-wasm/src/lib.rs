@@ -155,19 +155,28 @@ impl Receiver {
     }
 
     fn accept(&mut self, t: Tile) {
+        self.accept_up_to(t, MAX_KEPT);
+    }
+
+    /// [`Receiver::accept`] with the export cap as a parameter (tests use a small one).
+    /// Past the cap neither `kept` nor its dedup set grows: DATA can keep arriving as
+    /// `Pending` (no META yet) with no bound but the screen's.
+    fn accept_up_to(&mut self, t: Tile, max_kept: usize) {
         if self.file.is_some() {
             return;
         }
         let result = self.assembler.accept(&t);
-        let keep = match t.kind {
-            // Also when the replay of held DATA completes the decode right away.
-            TileKind::Meta => matches!(result, Accepted::MetaConfirmed | Accepted::Complete) && !self.kept_meta,
-            TileKind::Data => {
-                matches!(result, Accepted::Symbol | Accepted::Complete | Accepted::Pending)
-                    && self.kept_ids.insert((t.tag, t.sbn, t.esi))
-            }
-        };
-        if keep && self.kept.len() < MAX_KEPT {
+        let room = self.kept.len() < max_kept;
+        let keep = room
+            && match t.kind {
+                // Also when the replay of held DATA completes the decode right away.
+                TileKind::Meta => matches!(result, Accepted::MetaConfirmed | Accepted::Complete) && !self.kept_meta,
+                TileKind::Data => {
+                    matches!(result, Accepted::Symbol | Accepted::Complete | Accepted::Pending)
+                        && self.kept_ids.insert((t.tag, t.sbn, t.esi))
+                }
+            };
+        if keep {
             self.kept_meta |= t.kind == TileKind::Meta;
             self.kept.push(t);
         }
@@ -747,6 +756,18 @@ mod tests {
             fresh.import(&export_of(&frame));
         }
         assert_eq!(fresh.file(), Some(&data[..]));
+    }
+
+    #[test]
+    fn kept_tiles_and_their_ids_stop_at_the_cap() {
+        let mut rx = Receiver::new();
+        // DATA with no META: every distinct tile is answered Pending.
+        for esi in 0..50 {
+            rx.accept_up_to(Tile::data(0x1234, 0, esi, [0; 96]), 10);
+        }
+        assert_eq!(rx.kept.len(), 10);
+        assert_eq!(rx.kept_ids.len(), 10, "kept_ids must stop at the cap");
+        assert_eq!(rx.kept.last().map(|t| t.esi), Some(9), "the first ones are kept");
     }
 
     #[test]
