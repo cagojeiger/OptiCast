@@ -240,6 +240,10 @@ try {
     clearInterval(ticker)
   }
   const seconds = (Date.now() - startedAt) / 1000
+  // A straight receive shows its time and speed on the strip; a resumed one shows when it arrived.
+  const shown = ((await page.getByTestId('percent').textContent()) ?? '').trim()
+  const speedShown = args['reload-after'] ? shown.startsWith('at ') : /^(\d\.\d s|\d+ (h|min|s)( \d+ (min|s))?) · \d+(\.\d+)? (B|KB|MB|GB)\/s$/.test(shown)
+  console.log(`speed    strip shows "${shown}"`)
   const stats = JSON.parse((await page.getByTestId('debug').textContent()) || '{}')
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByTestId('download').click()])
   const savedPath = resolve(OUT, download.suggestedFilename())
@@ -261,7 +265,7 @@ try {
   await page.reload()
   const kept = await page.getByTestId('strip').getByText('Received').waitFor({ timeout: 10_000 }).then(() => true, () => false)
   console.log(`reload   kept file offered again: ${kept}`)
-  const ok = identical && stillAsks && kept && errors === 0
+  const ok = identical && stillAsks && kept && speedShown && errors === 0
   const overall = stats.totals?.tiles ? stats.totals.tiles_ok / stats.totals.tiles : 0
   const avgMs = samples.length ? samples.reduce((a, s) => a + s.ms, 0) / samples.length : 0
   const avgRecognition = samples.length ? samples.reduce((a, s) => a + s.recognition, 0) / samples.length : 0
@@ -275,6 +279,7 @@ try {
     decodeMs: avgMs,
     stillAsks,
     kept,
+    speedShown: shown,
     framesProcessed: stats.totals?.frames,
     detections: stats.totals?.detections,
     symbols: stats.symbols,

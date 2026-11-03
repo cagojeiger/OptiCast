@@ -121,7 +121,7 @@ describe('metrics', () => {
 describe('view', () => {
   const meta = { name: 'a.bin', size: 10, id: 'abcd1234', compression: 'none' }
   const stats = (have: number, need: number | null, done = false): ViewState['stats'] => ({ meta, done, symbols: { have, need }, too_large: null, limit: 64 * 2 ** 20 })
-  const offer = (canShare = true, over: Partial<NonNullable<ViewState['offer']>> = {}): ViewState['offer'] => ({ saved: false, downloaded: false, restored: false, at: 0, canShare, ...over })
+  const offer = (canShare = true, over: Partial<NonNullable<ViewState['offer']>> = {}): ViewState['offer'] => ({ saved: false, downloaded: false, restored: false, at: 0, size: 600_000, took: null, canShare, ...over })
   const state = (over: Partial<ViewState> = {}): ViewState => ({
     scanning: false,
     starting: false,
@@ -189,6 +189,13 @@ describe('view', () => {
     // A download can be cancelled (iOS asks first) and the page cannot tell: only a share counts as saved.
     assert.equal(view(state({ offer: offer(false, { downloaded: true }) })).hint.text, 'Download started. Check it, then press q in the terminal')
     assert.equal(view(state({ offer: offer(true, { downloaded: true, saved: true }) })).hint.text, 'Saved. You can start the next file.')
+    // A straight receive shows how long it took and the speed; otherwise (restored, paused, resumed) when it arrived.
+    assert.equal(view(state({ offer: offer(true, { took: 31.2 }) })).strip.right, '31 s · 19.2 KB/s')
+    assert.equal(view(state({ offer: offer(true, { took: 3.63 }) })).strip.right, '3.6 s · 165.3 KB/s', 'short times keep a decimal')
+    assert.equal(view(state({ offer: offer(true, { took: 1.01 }) })).strip.right, '1.0 s · 594.1 KB/s', 'the time shown agrees with the speed')
+    assert.equal(view(state({ offer: offer(true, { took: 9.96 }) })).strip.right, '10 s · 60.2 KB/s', 'never "10.0 s"')
+    assert.equal(view(state({ offer: offer(true, { took: 0.04 }) })).strip.right, 'under 1 s', 'no speed from a single frame')
+    assert.match(view(state({ offer: offer(true, { restored: true }) })).strip.right, /^at /)
     const error = view(state({ notice: { text: 'No camera found on this device.', tone: 'bad' } }))
     assert.equal(error.strip.extra, 'No camera found on this device.')
     assert.deepEqual(error.status, { text: 'No camera found on this device.', tone: 'bad' })

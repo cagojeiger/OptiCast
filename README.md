@@ -38,6 +38,8 @@ Keys while sending: `+`/`-` frame rate, space pause, `q` quit. `diodecam --help`
 | 120×40 | 15 KB/s | ~71 s |
 | 200×55 | 41.5 KB/s | ~26 s |
 
+When a file arrives, the phone shows how long it took and the speed it got ([measuring](docs/development.md#speed-on-a-phone)).
+
 ## How it works
 
 ```

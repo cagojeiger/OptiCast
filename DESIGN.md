@@ -126,7 +126,8 @@ the receiver (used by the e2e in desktop Chrome).
 | Error | guides | ✕ red | Start (secondary); Reload when the decoder is gone | by kept file | by kept file | enabled |
 
 The progress ring and bar stop at 99 % until the file is verified, and past the symbol estimate the
-strip says "A few more pieces to go" instead of a count. Download starts a browser download and Share
+strip says "A few more pieces to go" instead of a count. The done strip ends with the measured time
+and speed ("31 s · 19.2 KB/s", "3.6 s · 41.3 KB/s"), or the arrival time ("at 14:05") after a pause or a resume from saved progress. Download starts a browser download and Share
 · Save opens the share sheet; Reset asks once when the file is not yet saved (Share · Save counts as
 saved, Download does not: "Discard the received file? Check the download finished first."). When the decoder is gone only a reload helps (it resumes
 from the saved progress), so Start becomes Reload in the same place, primary unless a kept file is on

@@ -4,7 +4,7 @@
 // they are unit-tested without a browser: main.js gathers the inputs and applies
 // the result to the page.
 
-import { HINT_TEXT, formatSeconds, fps, hint, quantile, recognition, thousands, tooLargeText, trim } from './metrics.js?v=__V__'
+import { HINT_TEXT, formatBytes, formatSeconds, fps, hint, quantile, recognition, thousands, tooLargeText, trim } from './metrics.js?v=__V__'
 
 /** @import { FrameSample, Hint } from './metrics.js' */
 /** @import { ReceiverStats } from './wasm.js' */
@@ -16,8 +16,9 @@ import { HINT_TEXT, formatSeconds, fps, hint, quantile, recognition, thousands, 
  * @property {boolean} starting The camera is being opened.
  * @property {string} fatal Why the decoder is gone ('' while it works); only a reload helps.
  * @property {{ text: string, tone: 'warn' | 'bad' } | null} notice What the last action failed on.
- * @property {{ saved: boolean, downloaded: boolean, restored: boolean, at: number, canShare: boolean } | null} offer The verified file on
- *   offer: `saved` once shared, `downloaded` once a download started (it may have been cancelled).
+ * @property {{ saved: boolean, downloaded: boolean, restored: boolean, at: number, size: number, took: number | null, canShare: boolean } | null} offer
+ *   The verified file on offer: `saved` once shared, `downloaded` once a download started (it may
+ *   have been cancelled), `took` the seconds from its first tile read when that measures it.
  * @property {Pick<ReceiverStats, 'meta' | 'done' | 'symbols' | 'too_large' | 'limit'> | null} stats The decoder's last answer.
  * @property {number} resumed Pieces brought back from the saved progress.
  * @property {string} workerError A decoder message that does not stop reception.
@@ -74,8 +75,17 @@ export function view(v) {
   if (error) {
     strip = { state: 'error', label: '✕ Error', symbols: '', extra: v.fatal || v.notice?.text || '', right: '' }
   } else if (done && offer) {
-    const at = new Date(offer.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    strip = { state: 'done', label: '✓ Received', symbols: 'SHA-256 verified', extra: '', right: `at ${at}` }
+    // The measured time and speed when there is one (a straight receive), else when it arrived.
+    // Under a second there is no speed to speak of. Short times keep a decimal, so the time shown
+    // and the speed (from the exact time) agree within rounding.
+    const took = offer.took
+    const right =
+      took === null
+        ? `at ${new Date(offer.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+        : took < 1
+          ? 'under 1 s'
+          : `${took < 9.95 ? `${took.toFixed(1)} s` : formatSeconds(Math.round(took))} · ${formatBytes(Math.round(offer.size / took))}/s`
+    strip = { state: 'done', label: '✓ Received', symbols: 'SHA-256 verified', extra: '', right }
   } else if (receiving) {
     const read = v.rate === null ? '' : `${Math.round(v.rate * 100)}% read`
     const resumed = v.resumed > 0 ? ` · ${thousands(v.resumed)} resumed` : ''
