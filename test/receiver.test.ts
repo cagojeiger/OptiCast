@@ -193,6 +193,7 @@ describe('view', () => {
     assert.equal(view(state({ offer: offer(true, { took: 31.2 }) })).strip.right, '31 s · 19.2 KB/s')
     assert.equal(view(state({ offer: offer(true, { took: 3.63 }) })).strip.right, '3.6 s · 165.3 KB/s', 'short times keep a decimal')
     assert.equal(view(state({ offer: offer(true, { took: 1.01 }) })).strip.right, '1.0 s · 594.1 KB/s', 'the time shown agrees with the speed')
+    assert.equal(view(state({ offer: offer(true, { took: 9.96 }) })).strip.right, '10 s · 60.2 KB/s', 'never "10.0 s"')
     assert.equal(view(state({ offer: offer(true, { took: 0.04 }) })).strip.right, 'under 1 s', 'no speed from a single frame')
     assert.match(view(state({ offer: offer(true, { restored: true }) })).strip.right, /^at /)
     const error = view(state({ notice: { text: 'No camera found on this device.', tone: 'bad' } }))

@@ -84,7 +84,7 @@ export function view(v) {
         ? `at ${new Date(offer.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
         : took < 1
           ? 'under 1 s'
-          : `${took < 10 ? `${took.toFixed(1)} s` : formatSeconds(Math.round(took))} · ${formatBytes(Math.round(offer.size / took))}/s`
+          : `${took < 9.95 ? `${took.toFixed(1)} s` : formatSeconds(Math.round(took))} · ${formatBytes(Math.round(offer.size / took))}/s`
     strip = { state: 'done', label: '✓ Received', symbols: 'SHA-256 verified', extra: '', right }
   } else if (receiving) {
     const read = v.rate === null ? '' : `${Math.round(v.rate * 100)}% read`
