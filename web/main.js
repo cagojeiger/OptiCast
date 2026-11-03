@@ -268,7 +268,7 @@ worker.onmessage = (/** @type {MessageEvent<FromWorker>} */ { data }) => {
     case 'exported':
       // It holds every tile kept before it; the results after it count only newer ones.
       unsaved = false
-      void saveProgress(data.transferId, data.bytes, data.tiles)
+      void saveProgress(data.transferId, data.bytes, data.tiles, data.generation)
       break
     case 'imported':
       onImported(data)
@@ -807,6 +807,9 @@ function onImported(data) {
     queueRender()
     return
   }
+  // The import can complete the decode, and a failed verification there poisons the saved progress too.
+  if (data.stats.meta && data.stats.failed > failedSeen) store.remove(data.stats.meta.id).catch(() => {})
+  failedSeen = data.stats.failed
   resumed = data.tiles
   last = data.stats
   // The import is a jump, not a rate: measure the rate afresh from here.
@@ -819,11 +822,11 @@ function onImported(data) {
  * @param {string | null} id
  * @param {ArrayBuffer} tiles
  * @param {number} count
+ * @param {number} gen The reset generation when the export was requested: one requested before a reset is never saved.
  */
-async function saveProgress(id, tiles, count) {
+async function saveProgress(id, tiles, count, gen) {
   const meta = last?.meta
-  if (!id || !meta || meta.id !== id || last?.done || count <= 0) return
-  const gen = resetGen
+  if (!id || !meta || meta.id !== id || last?.done || count <= 0 || gen !== resetGen) return
   // The results of every frame before the export have arrived: a failure seen from here on
   // came after these tiles were collected, and its remove() must not be undone by this append.
   const failed = failedSeen
@@ -840,7 +843,7 @@ async function saveProgress(id, tiles, count) {
 /** Exports the tiles collected since the last export, if there are any. */
 function requestSave() {
   if (!last?.meta || last.done || !unsaved) return
-  send({ type: 'export' })
+  send({ type: 'export', generation: resetGen })
 }
 setInterval(requestSave, 5000)
 document.addEventListener('visibilitychange', () => {

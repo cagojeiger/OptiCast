@@ -55,7 +55,9 @@ export function exportTiles(data) {
 /**
  * Entries to delete: older than 7 days, or past the total size budget. `keep`
  * (the entry just saved) is never deleted and is counted first; the rest are
- * kept newest first.
+ * kept newest first. Without `keep` (at startup) the newest entry plays that
+ * part for the size budget, so a transfer larger than the budget still resumes;
+ * it goes only once it is older than 7 days.
  * @param {SavedMeta[]} entries
  * @param {number} now
  * @param {string | null} keep
@@ -63,9 +65,14 @@ export function exportTiles(data) {
 export function evictable(entries, now, keep) {
   /** @type {string[]} */
   const out = []
-  let total = entries.find((e) => e.id === keep)?.bytes ?? 0
-  for (const e of [...entries].sort((a, b) => b.savedAt - a.savedAt)) {
-    if (e.id === keep) continue
+  const sorted = [...entries].sort((a, b) => b.savedAt - a.savedAt)
+  const first = keep ?? sorted[0]?.id ?? null
+  let total = entries.find((e) => e.id === first)?.bytes ?? 0
+  for (const e of sorted) {
+    if (e.id === first) {
+      if (keep === null && now - e.savedAt > MAX_AGE_MS) out.push(e.id)
+      continue
+    }
     if (now - e.savedAt > MAX_AGE_MS || total + e.bytes > MAX_TOTAL_BYTES) out.push(e.id)
     else total += e.bytes
   }

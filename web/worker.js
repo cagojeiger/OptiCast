@@ -15,14 +15,14 @@ import { OUT_OF_MEMORY, WasmReceiver } from './wasm.js?v=__V__'
  *   | { type: 'reset' }
  *   | { type: 'debug', on: boolean }
  *   | { type: 'limit', mib: number }
- *   | { type: 'export' }
+ *   | { type: 'export', generation: number }
  *   | { type: 'import', chunks: ArrayBuffer[], generation: number }} ToWorker
  */
 
 /**
  * Worker → page.
  * @typedef {{ type: 'result', capturedAt: number, ms: number, stats: ReceiverStats, file: ArrayBuffer | null }
- *   | { type: 'exported', bytes: ArrayBuffer, tiles: number, transferId: string | null }
+ *   | { type: 'exported', bytes: ArrayBuffer, tiles: number, transferId: string | null, generation: number }
  *   | { type: 'imported', tiles: number, generation: number, stats: ReceiverStats }
  *   | { type: 'error', message: string, fatal: boolean }} FromWorker
  */
@@ -78,7 +78,7 @@ function handle(msg) {
         const state = rx.exportState()
         const tiles = state.length >= 8 ? new DataView(state.buffer).getUint32(4) : 0
         const bytes = /** @type {ArrayBuffer} */ (state.buffer)
-        post({ type: 'exported', bytes, tiles, transferId: rx.stats().meta?.id ?? null }, [bytes])
+        post({ type: 'exported', bytes, tiles, transferId: rx.stats().meta?.id ?? null, generation: msg.generation }, [bytes])
         return
       }
       case 'import': {

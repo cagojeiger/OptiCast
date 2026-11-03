@@ -454,6 +454,11 @@ describe('resume store', () => {
     assert.deepEqual(evictable([e('new', 0, 100), e('mid', 1, 20), e('old', 2, 20)], now, null), ['old'])
     // The entry being saved is never evicted, but counts towards the budget.
     assert.deepEqual(evictable([e('keep', 9, 120), e('x', 0, 20)], now, 'keep'), ['x'])
+    // At startup the newest entry is never evicted for size: a transfer over the budget still resumes.
+    assert.deepEqual(evictable([e('big', 0, 150)], now, null), [])
+    assert.deepEqual(evictable([e('big', 0, 150), e('older', 1, 10)], now, null), ['older'])
+    // …but it still goes after 7 days.
+    assert.deepEqual(evictable([e('big', 8, 150)], now, null), ['big'])
   })
 
   /** IDBKeyRange.bound for string keys, as store.js uses it. */
