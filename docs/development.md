@@ -35,6 +35,17 @@ On an Apple-silicon Mac whose default rustup toolchain is x86_64, prefix cargo w
 
 Generated files: `node tools/icons.ts` (icons), `node tools/qr.ts` (setup-page QR), `node tools/terminal-example.ts` (the terminal picture), `node tools/third-party-licenses.ts` (THIRD_PARTY_LICENSES.md, after Cargo.lock changes), `node tools/e2e.ts --shots docs/images --size 600000 --url <deployed>` (README images).
 
+## Speed on a phone
+
+The terminal's KB/s is the best case (every tile read); the phone's ✓ strip shows what arrived: the time from the first tile read, and size over that time.
+
+```sh
+head -c 1000000 /dev/urandom > bench.bin   # random, so compression cannot help
+diodecam bench.bin                         # note the terminal size, fps and KB/s
+```
+
+Start the camera, frame the grid, and keep the camera on until ✓ (a pause or a reload shows the arrival time instead). Phone KB/s ÷ terminal KB/s is the share of the screen's rate that arrived; repeat three times and take the middle one.
+
 ## Release
 
 - **CI** (`.github/workflows/ci.yml`, every PR and `main`): types, fmt, clippy, tests, wasm, JS tests, and the site assembled with the commit and version filled in, plus a check that the setup-page terminal picture is current and a separate `e2e` job (real Chrome against the real sender; not yet required for the deploy). `main` deploys the site to GitHub Pages.

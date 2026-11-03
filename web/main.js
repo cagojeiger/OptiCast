@@ -158,9 +158,17 @@ const RESTORE_FAILED = { text: 'Could not restore the saved progress. Collecting
  * The verified file on offer; `restored` when it came back from IndexedDB after a
  * reload, `saved` once shared (the share sheet resolves only when the file went somewhere),
  * `downloaded` once a download was started (which the browser, notably iOS, lets the user cancel).
- * @type {{ url: string, name: string, file: File, id: string, at: number, restored: boolean, saved: boolean, downloaded: boolean } | null}
+ * `took` is the seconds from the first tile read to the verified file, or null when that is not
+ * the time it took (a restored file, a pause, a resume).
+ * @type {{ url: string, name: string, file: File, id: string, at: number, restored: boolean, saved: boolean, downloaded: boolean, took: number | null } | null}
  */
 let offer = null
+/**
+ * When the current transfer's first tile was read (the capture time). `clean` until the camera
+ * stops or saved progress is imported: from then on the time no longer measures the transfer.
+ * @type {{ start: number, id: string | null, clean: boolean } | null}
+ */
+let clock = null
 /** @type {Set<string>} Transfer IDs already looked up in IndexedDB. */
 const resumeChecked = new Set()
 let resumed = 0
@@ -309,6 +317,11 @@ function onResult(r) {
   frames = trim([...frames, { t: r.capturedAt, grid: s.detected, tilesOk: s.tiles.ok, tiles: s.tiles.total, stage: s.stage, module }], 2000)
   progress = trim([...progress, { t: now, have: s.symbols.have }], 5000)
   if (s.kept > 0) unsaved = true
+  if (s.tiles.ok > 0) {
+    // Another transfer's tiles restart the clock; tiles before its header have no ID yet.
+    if (!clock || (s.meta && clock.id !== null && clock.id !== s.meta.id)) clock = { start: r.capturedAt, id: null, clean: true }
+    if (s.meta && clock.id === null) clock.id = s.meta.id
+  }
   note(s, module)
   // Another transfer has begun: the kept file leaves the screen (it stays stored until this one completes).
   if (offer && s.meta && s.meta.id !== offer.id && !s.done) clearOffer()
@@ -450,7 +463,7 @@ function render() {
     starting,
     fatal: fatalError,
     notice,
-    offer: offer && { saved: offer.saved, downloaded: offer.downloaded, restored: offer.restored, at: offer.at, canShare: navigator.canShare?.({ files: [offer.file] }) ?? false },
+    offer: offer && { saved: offer.saved, downloaded: offer.downloaded, restored: offer.restored, at: offer.at, size: offer.file.size, took: offer.took, canShare: navigator.canShare?.({ files: [offer.file] }) ?? false },
     stats: s,
     resumed,
     workerError,
@@ -652,6 +665,7 @@ function cameraMuted(of, muted) {
 }
 
 function stopCamera() {
+  if (clock) clock.clean = false
   viewer.classList.remove('detected')
   void wakeLock?.release().catch(() => {})
   wakeLock = null
@@ -674,10 +688,12 @@ function finish(file, s) {
   const name = safeName(s.meta?.name ?? 'file')
   const id = s.meta?.id ?? ''
   const blob = new Blob([file], { type: 'application/octet-stream' })
+  const took = clock?.clean ? (performance.now() - clock.start) / 1000 : null
+  clock = null
   stopCamera()
   if (notice === RESTORE_FAILED) notice = null // the file is here; nothing is left to restore
   const at = Date.now()
-  show(blob, name, id, at, false)
+  show(blob, name, id, at, false, took)
   if (s.meta) store.remove(s.meta.id).catch(() => {})
   // Kept until the next file or a reset, so closing the tab before saving does not lose it.
   store.keepFile({ id, name, size: blob.size, receivedAt: at, blob }).catch((err) => console.warn('keeping the file failed', err))
@@ -690,11 +706,12 @@ function finish(file, s) {
  * @param {string} id
  * @param {number} at
  * @param {boolean} restored
+ * @param {number | null} [took]
  */
-function show(blob, name, id, at, restored) {
+function show(blob, name, id, at, restored, took = null) {
   clearOffer()
   const file = new File([blob], name, { type: 'application/octet-stream' })
-  offer = { url: URL.createObjectURL(file), name, file, id, at, restored, saved: false, downloaded: false }
+  offer = { url: URL.createObjectURL(file), name, file, id, at, restored, saved: false, downloaded: false, took }
   queueRender()
 }
 
@@ -811,6 +828,7 @@ function onImported(data) {
   if (data.stats.meta && data.stats.failed > failedSeen) store.remove(data.stats.meta.id).catch(() => {})
   failedSeen = data.stats.failed
   resumed = data.tiles
+  if (data.tiles > 0 && clock) clock.clean = false
   last = data.stats
   // The import is a jump, not a rate: measure the rate afresh from here.
   progress = [{ t: performance.now(), have: data.stats.symbols.have }]
@@ -863,6 +881,7 @@ function reset() {
   }
   send({ type: 'reset' })
   last = null
+  clock = null
   frames = []
   progress = []
   decodeMs = 0

@@ -15,7 +15,7 @@ A phone browser (iPhone Safari first) films the terminal and rebuilds the file. 
 
 ## 2. States
 
-`○ Idle` / `○ Looking` / `○ Paused` → `● Receiving` → `✓ Received · SHA-256 verified`, or `✕ Error`. The strip changes colour in one place; the buttons never move and are only enabled or disabled. A file counts as received only after RaptorQ decode, size check and SHA-256 match; until then progress stops at 99 %. Errors say what to do in one sentence (camera denied, camera taken by another app, file too large, decoder error → **Reload** in place of Start).
+`○ Idle` / `○ Looking` / `○ Paused` → `● Receiving` → `✓ Received · SHA-256 verified`, or `✕ Error`. The strip changes colour in one place; the buttons never move and are only enabled or disabled. A file counts as received only after RaptorQ decode, size check and SHA-256 match; until then progress stops at 99 %. The ✓ strip then shows the time from the first tile read and the speed (size over that time); after a pause, a resume or a reload it shows when the file arrived. Errors say what to do in one sentence (camera denied, camera taken by another app, file too large, decoder error → **Reload** in place of Start).
 
 One line of text sits over the camera; the most urgent wins: a camera, share or restore failure, then opening the camera, file too large, received, paused, looking, receiving. Download only starts a download, so Reset still asks before discarding the file; Share counts as saved once it succeeds.
 

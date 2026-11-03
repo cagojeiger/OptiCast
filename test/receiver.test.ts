@@ -121,7 +121,7 @@ describe('metrics', () => {
 describe('view', () => {
   const meta = { name: 'a.bin', size: 10, id: 'abcd1234', compression: 'none' }
   const stats = (have: number, need: number | null, done = false): ViewState['stats'] => ({ meta, done, symbols: { have, need }, too_large: null, limit: 64 * 2 ** 20 })
-  const offer = (canShare = true, over: Partial<NonNullable<ViewState['offer']>> = {}): ViewState['offer'] => ({ saved: false, downloaded: false, restored: false, at: 0, canShare, ...over })
+  const offer = (canShare = true, over: Partial<NonNullable<ViewState['offer']>> = {}): ViewState['offer'] => ({ saved: false, downloaded: false, restored: false, at: 0, size: 600_000, took: null, canShare, ...over })
   const state = (over: Partial<ViewState> = {}): ViewState => ({
     scanning: false,
     starting: false,
@@ -189,7 +189,11 @@ describe('view', () => {
     // A download can be cancelled (iOS asks first) and the page cannot tell: only a share counts as saved.
     assert.equal(view(state({ offer: offer(false, { downloaded: true }) })).hint.text, 'Download started. Check it, then press q in the terminal')
     assert.equal(view(state({ offer: offer(true, { downloaded: true, saved: true }) })).hint.text, 'Saved. You can start the next file.')
-    const error = view(state({ notice: { text: 'No camera found on this device.', tone: 'bad' } }))
+    // A straight receive shows how long it took and the speed; otherwise (restored, paused, resumed) when it arrived.
+    assert.equal(view(state({ offer: offer(true, { took: 31.2 }) })).strip.right, '32 s · 19.2 KB/s')
+    assert.equal(view(state({ offer: offer(true, { took: 0 }) })).strip.right, 'under 1 s · 6.00 MB/s')
+    assert.match(view(state({ offer: offer(true, { restored: true }) })).strip.right, /^at /)
+    const error =view(state({ notice: { text: 'No camera found on this device.', tone: 'bad' } }))
     assert.equal(error.strip.extra, 'No camera found on this device.')
     assert.deepEqual(error.status, { text: 'No camera found on this device.', tone: 'bad' })
     // A warning (a failed share, a failed restore) is not an error.
