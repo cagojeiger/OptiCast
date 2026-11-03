@@ -44,7 +44,7 @@ head -c 1000000 /dev/urandom > bench.bin   # random, so compression cannot help
 diodecam bench.bin                         # note the terminal size, fps and KB/s
 ```
 
-Start the camera, frame the grid, and keep the camera on until ✓ (a pause or a reload shows the arrival time instead). Phone KB/s ÷ terminal KB/s is the share of the screen's rate that arrived; repeat three times and take the middle one.
+Start the camera, frame the grid, and keep the camera on until ✓ (after a pause, or once saved progress is resumed, the strip shows the arrival time instead). Phone KB/s ÷ terminal KB/s is the share of the screen's rate that arrived; repeat three times and take the middle one.
 
 ## Release
 

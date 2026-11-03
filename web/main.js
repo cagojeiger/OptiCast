@@ -317,9 +317,12 @@ function onResult(r) {
   frames = trim([...frames, { t: r.capturedAt, grid: s.detected, tilesOk: s.tiles.ok, tiles: s.tiles.total, stage: s.stage, module }], 2000)
   progress = trim([...progress, { t: now, have: s.symbols.have }], 5000)
   if (s.kept > 0) unsaved = true
-  if (s.tiles.ok > 0) {
-    // Another transfer's tiles restart the clock; tiles before its header have no ID yet.
-    if (!clock || (s.meta && clock.id !== null && clock.id !== s.meta.id)) clock = { start: r.capturedAt, id: null, clean: true }
+  // A refused (too large) transfer's tiles time nothing: the next one starts its own clock.
+  if (s.too_large && !s.meta) clock = null
+  else if (s.tiles.ok > 0) {
+    // Another transfer's tiles restart the clock; tiles before its header have no ID yet. A frame
+    // still in the worker when the camera stopped starts it already spoiled.
+    if (!clock || (s.meta && clock.id !== null && clock.id !== s.meta.id)) clock = { start: r.capturedAt, id: null, clean: scanning }
     if (s.meta && clock.id === null) clock.id = s.meta.id
   }
   note(s, module)
@@ -659,8 +662,10 @@ const CAMERA_PAUSED = { text: 'The camera is paused by the system.', tone: /** @
 /** @param {MediaStream} of @param {boolean} muted */
 function cameraMuted(of, muted) {
   if (stream !== of) return
-  if (muted) notice = CAMERA_PAUSED
-  else if (notice === CAMERA_PAUSED) notice = null
+  if (muted) {
+    notice = CAMERA_PAUSED
+    if (clock) clock.clean = false // the pause would count as transfer time
+  } else if (notice === CAMERA_PAUSED) notice = null
   queueRender()
 }
 
@@ -865,8 +870,10 @@ function requestSave() {
 }
 setInterval(requestSave, 5000)
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') requestSave()
-  else if (scanning && (!wakeLock || wakeLock.released)) void keepAwake() // the lock is dropped while hidden
+  if (document.visibilityState === 'hidden') {
+    requestSave()
+    if (clock) clock.clean = false // no frames while hidden: the time is no longer the transfer's
+  } else if (scanning && (!wakeLock || wakeLock.released)) void keepAwake() // the lock is dropped while hidden
 })
 store.evict().catch(() => {})
 
