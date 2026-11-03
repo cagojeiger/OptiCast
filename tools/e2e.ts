@@ -20,7 +20,7 @@
 //                          [--url URL]          (test a deployed receiver instead of building and serving web/)
 //                          [--resize-to CxR]    (terminal resized halfway through the clip, and back as it loops)
 //                          [--hold S]           (keep the browser open S seconds after the result; screenshots in dist/e2e)
-//                          [--shots DIR]        (README images: the setup page in both themes, and the receiver in a
+//                          [--shots DIR]        (screenshots: the setup page in both themes, and the receiver in a
 //                                                phone viewport while receiving and when done, without the debug overlay;
 //                                                use with --url <deployed> so the footer shows the real version)
 
@@ -53,7 +53,7 @@ const { values: args } = parseArgs({
     url: { type: 'string' }, // receiver to test, e.g. https://cagojeiger.github.io/diodecam/ (default: local build)
     'resize-to': { type: 'string' }, // CxR: resize the terminal halfway through the clip
     hold: { type: 'string' }, // keep the browser open S seconds after the result (with --headed)
-    shots: { type: 'string' }, // directory for the README images
+    shots: { type: 'string' }, // directory for documentation screenshots
     'reload-after': { type: 'string' }, // reload the page after S seconds: progress must resume from IndexedDB
     headed: { type: 'boolean', default: false },
     keep: { type: 'boolean', default: false },

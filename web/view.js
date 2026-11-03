@@ -1,5 +1,5 @@
 // @ts-check
-// What the receiver shows for a state (DESIGN.md "Interaction states") and what
+// What the receiver shows for a state and what
 // `Copy diagnostics` copies (docs/web.md §6). Pure functions of plain objects, so
 // they are unit-tested without a browser: main.js gathers the inputs and applies
 // the result to the page.

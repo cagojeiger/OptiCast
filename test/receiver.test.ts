@@ -146,7 +146,7 @@ describe('view', () => {
       .filter(([, b]) => 'primary' in b && b.primary)
       .map(([k]) => k)
 
-  it('follows the interaction-state table (DESIGN.md)', () => {
+  it('keeps controls consistent across receiver states', () => {
     // [state, strip, enabled buttons, primary buttons, ring, tick]
     const table: [string, ViewState, View['strip']['state'], string[], string[], boolean, boolean][] = [
       ['idle', state(), 'idle', ['start'], ['start'], false, false],

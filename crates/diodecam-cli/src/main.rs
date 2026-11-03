@@ -1,5 +1,5 @@
 //! `diodecam`: DiodeCam sender. Draws a file as a stream of optical frames
-//! in the terminal for a phone camera to receive (`docs/cli.md`).
+//! in the terminal for a phone camera to receive.
 
 mod args;
 mod file;

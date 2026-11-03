@@ -1,6 +1,6 @@
 // App icons (web/icon-*.png) and the favicon (web/icon.svg): a lens ring with the
 // grid the camera reads inside it, black and white only: the icon is identity,
-// green on the page is a status signal, and the two stay apart (DESIGN.md, Brand). The motif
+// green on the page is a status signal, and the two stay apart. The motif
 // sits inside the middle 70 % so the 512 px one also works as a maskable icon.
 // Plain RGB PNG with 4× supersampling, no dependencies.
 //

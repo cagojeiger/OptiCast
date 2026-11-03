@@ -1,6 +1,6 @@
 # Receiver (web)
 
-A phone browser (iPhone Safari first) rebuilds the file on the device; nothing is uploaded or opened. UI principles: [DESIGN.md](../DESIGN.md).
+A phone browser (iPhone Safari first) rebuilds the file on the device; nothing is uploaded or opened.
 
 ## 1. Address
 
@@ -15,13 +15,12 @@ Desktop browsers with a mouse show setup; phones and the home-screen app show th
 
 ## 2. States
 
-Start the camera to receive; Stop pauses collection and Start continues it. A file becomes available only after decoding, size checking and SHA-256 verification; progress stays at most 99 % until then.
-The done strip shows time from the first tile and received bytes per second. After a pause, hidden page or restored progress it shows arrival time instead; under a second it shows no speed. A fatal decoder error requires Reload to use saved progress.
-Download only starts a browser download, so Reset still asks before discarding the file. A successful Share counts as saved. Exact states, button rules and copy live in [web/view.js](../web/view.js).
+Files become available after decoding, size checking and SHA-256 verification. Download only starts a browser download, so Reset still asks before discarding the file; a successful Share counts as saved.
+A fatal decoder error requires Reload to recover saved progress. Exact states, timing and button behavior live in [web/view.js](../web/view.js).
 
 ## 3. Hints
 
-Follow the advice below the progress strip: frame all four corners, hold still, face the screen, move closer or turn sideways, or adjust sender fps. It uses the last two seconds of recognition; the frame outline shows tile quality. Conditions and wording live in [web/metrics.js](../web/metrics.js).
+Follow the on-screen advice to adjust framing, distance or sender fps. Recognition conditions and wording live in [web/metrics.js](../web/metrics.js).
 
 ## 4. Storage
 

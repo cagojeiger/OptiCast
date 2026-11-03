@@ -26,6 +26,15 @@ Everything in the repository is English.
 - **Shared Rust core**: the CLI and browser WASM use the same format and assembly code. They deploy separately, so golden tests also preserve compatibility with released senders. The exact format is in [protocol.md](protocol.md).
 - **Simple delivery**: the sender is a native binary with no language runtime to install. The receiver uses plain JS modules, a Worker and WASM, with no app install or web bundler; its vision code follows the known grid.
 
+## Behavior to preserve
+
+- **Sender status**: `source` is the first symbol pass; `+repair` counts later repair symbols. `phone needs` estimates viewing time with no missed tiles; decoding can need more repairs.
+- **Terminal**: resizing continues the same transfer; a small window shows the minimum size. Quit restores the terminal. The default 24 fps avoids phase lock with a 30 fps camera.
+- **Exit codes**: 0 quit, 1 file or terminal error, 2 usage error, 129 terminal gone, 130 Ctrl-C, 143 SIGTERM.
+- **Layout**: fit phone 375×553 and desktop 1024×700 without scrolling. Keep controls and hint space fixed across states; smaller desktop windows may scroll.
+- **Accessibility**: targets ≥44 px, main actions 52 px, enabled-text contrast ≥4.5:1. Keep keyboard focus, named controls and announced status; show state with words and symbols as well as color.
+- **Copy**: short, concrete English in sentence case; name the next action.
+
 ## Build and test
 
 ```sh
@@ -41,7 +50,7 @@ node tools/floor.ts [cols] [rows]       # decoder floor: tiles read per module s
 
 On an Apple-silicon Mac whose default rustup toolchain is x86_64, prefix cargo with `RUSTUP_TOOLCHAIN=stable-aarch64-apple-darwin DEVELOPER_DIR=/Library/Developer/CommandLineTools` (the pnpm scripts do this).
 
-Generated files: `node tools/icons.ts` (icons), `node tools/qr.ts` (setup-page QR; pass the receiver URL as an argument for a custom domain), `node tools/terminal-example.ts` (the terminal picture), `node tools/third-party-licenses.ts` (THIRD_PARTY_LICENSES.md, after Cargo.lock changes), `node tools/e2e.ts --shots docs/images --size 600000 --url <deployed>` (README images).
+Generated files: `node tools/icons.ts` (icons), `node tools/qr.ts` (setup-page QR; pass the receiver URL as an argument for a custom domain), `node tools/terminal-example.ts` (the terminal picture), `node tools/third-party-licenses.ts` (THIRD_PARTY_LICENSES.md, after Cargo.lock changes), `node tools/e2e.ts --shots docs/images --size 600000 --url <deployed>` (screenshots).
 
 ## Speed on a phone
 
