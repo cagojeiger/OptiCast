@@ -15,7 +15,9 @@ A phone browser (iPhone Safari first) films the terminal and rebuilds the file. 
 
 ## 2. States
 
-`○ Idle` → `● Receiving` → `✓ Received · SHA-256 verified`, or `✕ Error`. The strip changes colour in one place; the buttons never move and are only enabled or disabled. A file counts as received only after RaptorQ decode, size check and SHA-256 match. Errors say what to do in one sentence (camera denied, camera taken by another app, file too large, decoder error → **Reload** in place of Start).
+`○ Idle` / `○ Looking` / `○ Paused` → `● Receiving` → `✓ Received · SHA-256 verified`, or `✕ Error`. The strip changes colour in one place; the buttons never move and are only enabled or disabled. A file counts as received only after RaptorQ decode, size check and SHA-256 match; until then progress stops at 99 %. Errors say what to do in one sentence (camera denied, camera taken by another app, file too large, decoder error → **Reload** in place of Start).
+
+One line of text sits over the camera; the most urgent wins: a camera, share or restore failure, then opening the camera, file too large, received, paused, looking, receiving. Download only starts a download, so Reset still asks before discarding the file; Share counts as saved once it succeeds.
 
 ## 3. Hints
 
@@ -24,7 +26,7 @@ The frame border is green when ≥ 70 % of tiles pass, orange when some do, red 
 | Condition | Advice |
 |---|---|
 | Grid in under half the frames, stopped at finders | Frame the whole screen, all four corner marks |
-| 〃, at timing lines or format | The grid is blurred: hold still, at a distance that focuses |
+| 〃, at timing lines or format | The grid is blurred: hold still, at a distance that focuses (with modules < 4.5 px: the sideways or closer advice below) |
 | 〃, at geometry | The grid looks bent: face the screen, a little further back |
 | Tiles read ≥ 90 % | You can raise the sender fps (+) |
 | Tiles read < 70 %, modules < 4.5 px, portrait | Hold the phone sideways for a larger grid |

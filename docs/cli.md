@@ -32,4 +32,4 @@ Resizing the terminal is fine: the next frame uses the new layout and the transf
 | space | Pause / resume |
 | `q`, Esc, Ctrl-C | Quit and restore the terminal |
 
-Exit codes: 0 done, 1 input error, 2 usage error, 129 terminal gone (SIGHUP or stdin closed), 130 Ctrl-C, 143 SIGTERM.
+Exit codes: 0 quit, 1 error (file or terminal), 2 usage error, 129 terminal gone (SIGHUP or stdin closed), 130 Ctrl-C, 143 SIGTERM.

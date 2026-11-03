@@ -30,7 +30,7 @@ Keys while sending: `+`/`-` frame rate, space pause, `q` quit. `diodecam --help`
 
 ## Speed
 
-24 fps, incompressible data. The grid fills the terminal, so a bigger terminal is faster.
+24 fps, incompressible data, every tile read (the best case). The grid fills the terminal, so a bigger terminal is faster.
 
 | Terminal | Per second | 1 MiB |
 |---|---|---|
@@ -45,7 +45,7 @@ send:    file → RaptorQ symbols → 128-byte tiles (Reed–Solomon + CRC-32C) 
 receive: camera → find the grid → check each tile → about K + 2 symbols → rebuild → SHA-256 → save
 ```
 
-The sender repeats fresh repair symbols forever, so a missed frame only costs time: the phone needs about K + 2 symbols (K is the file's symbol count), not particular ones. A damaged tile fails its checks and is dropped, never misread.
+The sender repeats fresh repair symbols forever, so a missed frame only costs time: the phone needs about K + 2 symbols (K is the file's symbol count), not particular ones. A damaged tile fails its checks and is dropped, and the rebuilt file must match its SHA-256 before it can be saved.
 
 ## Safety
 

@@ -27,6 +27,7 @@ pnpm install && pnpm typecheck          # JSDoc types over web/ and tools/
 pnpm wasm && pnpm test                  # build web/diodecam.wasm, run the JS tests
 pnpm serve                              # receiver at http://localhost:5173
 pnpm e2e                                # real sender → simulated camera → Chrome → byte compare
+cargo test -p diodecam-cli --test tmux_probe -- --ignored   # a real tmux terminal: restore, resize, q
 node tools/floor.ts [cols] [rows]       # decoder floor: tiles read per module size and blur
 ```
 
@@ -37,5 +38,5 @@ Generated files: `node tools/icons.ts` (icons), `node tools/qr.ts` (setup-page Q
 ## Release
 
 - **CI** (`.github/workflows/ci.yml`, every PR and `main`): types, fmt, clippy, tests, wasm, JS tests, and the site assembled with the commit and version filled in. `main` deploys it to GitHub Pages.
-- **Release** (`release.yml`, tag `vX.Y.Z`): after the tests pass, builds the sender for Linux (musl) and macOS and attaches `diodecam-<target>.tar.gz` + `.sha256` (binary, LICENSE, THIRD_PARTY_LICENSES.md, README). The names carry no version, so `releases/latest/download/…` stays fixed.
+- **Release** (`release.yml`, tag `vX.Y.Z`): builds the sender for Linux (musl) and macOS beside the tests and, once both pass, attaches `diodecam-<target>.tar.gz` + `.sha256` (binary, LICENSE, THIRD_PARTY_LICENSES.md, README). The names carry no version, so `releases/latest/download/…` stays fixed.
 - The version lives only in `Cargo.toml`. PRs are squash-merged as `type(scope): summary (#N)`.
