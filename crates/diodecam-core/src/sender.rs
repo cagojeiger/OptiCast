@@ -59,13 +59,14 @@ pub fn data_tiles_per_frame(tiles: usize) -> f64 {
     tiles as f64 - 1.0 / meta_interval(tiles) as f64
 }
 
-/// "phone needs": seconds of view to collect K + 2 symbols at `fps`. For an
-/// empty file (K = 0) it is the time until one META frame is shown.
-pub fn view_seconds(source_symbols: u64, tiles: usize, fps: f64) -> f64 {
-    if source_symbols == 0 {
+/// "phone needs": seconds of view to collect `symbols_needed` symbols
+/// ([`Transfer::symbols_needed`]) at `fps`. For an empty file (0 needed) it is
+/// the time until one META frame is shown.
+pub fn view_seconds(symbols_needed: u64, tiles: usize, fps: f64) -> f64 {
+    if symbols_needed == 0 {
         return meta_interval(tiles) as f64 / fps;
     }
-    (source_symbols + 2) as f64 / (fps * data_tiles_per_frame(tiles))
+    symbols_needed as f64 / (fps * data_tiles_per_frame(tiles))
 }
 
 /// ESI of the `i`-th repair symbol of a block with K source symbols:
@@ -234,6 +235,15 @@ impl Transfer {
         self.blocks.len()
     }
 
+    /// Symbols a receiver should expect to need: K_b + 2 per block, K + 2·Z in all
+    /// (0 for an empty file). Matches `Assembler::symbols_needed`.
+    pub fn symbols_needed(&self) -> u64 {
+        match self.source_symbols() {
+            0 => 0,
+            k => k + 2 * self.source_blocks() as u64,
+        }
+    }
+
     pub fn frames_sent(&self) -> u64 {
         self.frames
     }
@@ -383,6 +393,7 @@ mod tests {
             (0..k * 96 - 50).map(|i| (i as u32).wrapping_mul(2_654_435_761).rotate_left(7) as u8).collect();
         let mut t = Transfer::prepare(&data, "big.bin", SendOptions { compress: false }, 7).unwrap();
         assert_eq!(t.source_blocks(), 2);
+        assert_eq!(t.symbols_needed(), k as u64 + 4);
         assert_eq!(t.source_symbols(), k as u64);
         let mut seen = std::collections::HashSet::new();
         let mut first = None;
@@ -443,7 +454,7 @@ mod tests {
     #[test]
     fn view_time() {
         // 19 tiles → 18 DATA tiles per frame.
-        assert!((view_seconds(10_000 - 2, 19, 15.0) - 10_000.0 / 270.0).abs() < 1e-9);
+        assert!((view_seconds(10_000, 19, 15.0) - 10_000.0 / 270.0).abs() < 1e-9);
         assert!((view_seconds(0, 2, 10.0) - 0.5).abs() < 1e-9);
     }
 }

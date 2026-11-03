@@ -20,7 +20,7 @@ The grid fills the terminal above two status lines:
  00:41  source 100% [##########]  +repair 13,420  24 fps  41.5 KB/s  phone needs ~10s of view  [+/-] fps [space] pause [q] quit
 ```
 
-`source` is the first pass over the file's symbols; `+repair` counts the repair symbols sent since. `phone needs` is about how long the phone has to watch to collect K + 2 symbols at the current rate.
+`source` is the first pass over the file's symbols; `+repair` counts the repair symbols sent since. `phone needs` is about how long the phone has to watch to collect K + 2 symbols per block at the current rate.
 
 Resizing the terminal is fine: the next frame uses the new layout and the transfer carries on. A terminal too small for the grid shows the minimum size until it grows.
 
