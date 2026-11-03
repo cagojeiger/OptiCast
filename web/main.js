@@ -149,7 +149,8 @@ let fatalError = ''
 let notice = null
 /**
  * The saved progress could not be imported (only out of memory). Reception goes on, so it is a
- * warning, not an error; it goes once new progress is saved or the file completes.
+ * warning, not an error; it goes once the file completes. New tiles are appended to the saved
+ * progress, so a reload still retries it.
  * @type {{ text: string, tone: 'warn' }}
  */
 const RESTORE_FAILED = { text: 'Could not restore the saved progress. Collecting again; reload to retry.', tone: 'warn' }
@@ -163,8 +164,8 @@ let offer = null
 /** @type {Set<string>} Transfer IDs already looked up in IndexedDB. */
 const resumeChecked = new Set()
 let resumed = 0
-/** `kept` when the last export was requested; the next runs only when it grew. */
-let exportedKept = 0
+/** The decoder has kept tiles since its last export; the next export appends them to the saved progress. */
+let unsaved = false
 /** Verification failures seen; a new one means the saved tiles are poisoned. */
 let failedSeen = 0
 let renderQueued = false
@@ -265,6 +266,8 @@ worker.onmessage = (/** @type {MessageEvent<FromWorker>} */ { data }) => {
       onResult(data)
       break
     case 'exported':
+      // It holds every tile kept before it; the results after it count only newer ones.
+      unsaved = false
       void saveProgress(data.transferId, data.bytes, data.tiles)
       break
     case 'imported':
@@ -305,6 +308,7 @@ function onResult(r) {
   const module = s.detected ? moduleSize(s.corners, s.grid) : null
   frames = trim([...frames, { t: r.capturedAt, grid: s.detected, tilesOk: s.tiles.ok, tiles: s.tiles.total, stage: s.stage, module }], 2000)
   progress = trim([...progress, { t: now, have: s.symbols.have }], 5000)
+  if (s.kept > 0) unsaved = true
   note(s, module)
   // Another transfer has begun: the kept file leaves the screen (it stays stored until this one completes).
   if (offer && s.meta && s.meta.id !== offer.id && !s.done) clearOffer()
@@ -312,7 +316,6 @@ function onResult(r) {
     if (s.failed > failedSeen) {
       // A failed verification restarts the decode: what was saved is poisoned.
       store.remove(s.meta.id).catch(() => {})
-      exportedKept = 0
     }
     if (!resumeChecked.has(s.meta.id)) {
       resumeChecked.add(s.meta.id)
@@ -789,7 +792,7 @@ async function tryResume(id) {
   try {
     const saved = await store.load(id)
     // A reset while IndexedDB was busy means "start over": do not bring the old tiles back.
-    if (saved && gen === resetGen && saved.tiles > 0) send({ type: 'import', bytes: saved.data, generation: gen }, [saved.data])
+    if (saved && gen === resetGen && saved.tiles > 0) send({ type: 'import', chunks: saved.data, generation: gen }, saved.data)
   } catch (err) {
     console.warn('resume lookup failed', err)
   }
@@ -812,6 +815,7 @@ function onImported(data) {
 }
 
 /**
+ * Appends an export (the tiles collected since the previous one) to the saved progress.
  * @param {string | null} id
  * @param {ArrayBuffer} tiles
  * @param {number} count
@@ -820,26 +824,22 @@ async function saveProgress(id, tiles, count) {
   const meta = last?.meta
   if (!id || !meta || meta.id !== id || last?.done || count <= 0) return
   const gen = resetGen
+  // The results of every frame before the export have arrived: a failure seen from here on
+  // came after these tiles were collected, and its remove() must not be undone by this append.
+  const failed = failedSeen
   try {
-    // Decided inside the save's own transaction, so a reset's remove cannot come between the check
-    // and the write: nothing after a reset, and never a smaller export over a saved entry (one made
-    // while saved tiles were being re-imported).
-    const entry = { id, name: meta.name, size: meta.size, savedAt: Date.now(), data: tiles }
-    if (!(await store.save(entry, { only: (stored) => gen === resetGen && !last?.done && last?.meta?.id === id && store.shouldSave(stored, count) }))) return
-    // The new progress replaced the entry that could not be restored.
-    if (notice === RESTORE_FAILED) {
-      notice = null
-      queueRender()
-    }
+    // Decided inside the append's own transaction, so a remove (reset, failed verification) cannot
+    // come between the check and the write: nothing after a reset or a newer failure.
+    const entry = { id, name: meta.name, size: meta.size, savedAt: Date.now() }
+    await store.append(entry, tiles, { only: () => gen === resetGen && !last?.done && last?.meta?.id === id && failedSeen === failed })
   } catch (err) {
     console.warn('saving progress failed', err)
   }
 }
 
-/** Exports collected tiles, only when more were collected since the last export. */
+/** Exports the tiles collected since the last export, if there are any. */
 function requestSave() {
-  if (!last?.meta || last.done || last.kept <= exportedKept) return
-  exportedKept = last.kept
+  if (!last?.meta || last.done || !unsaved) return
   send({ type: 'export' })
 }
 setInterval(requestSave, 5000)
@@ -864,7 +864,7 @@ function reset() {
   progress = []
   decodeMs = 0
   resumed = 0
-  exportedKept = 0
+  unsaved = false
   failedSeen = 0
   workerError = ''
   viewer.classList.remove('detected')

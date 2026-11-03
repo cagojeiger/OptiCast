@@ -16,7 +16,7 @@ import { OUT_OF_MEMORY, WasmReceiver } from './wasm.js?v=__V__'
  *   | { type: 'debug', on: boolean }
  *   | { type: 'limit', mib: number }
  *   | { type: 'export' }
- *   | { type: 'import', bytes: ArrayBuffer, generation: number }} ToWorker
+ *   | { type: 'import', chunks: ArrayBuffer[], generation: number }} ToWorker
  */
 
 /**
@@ -82,7 +82,16 @@ function handle(msg) {
         return
       }
       case 'import': {
-        const tiles = rx.importState(new Uint8Array(msg.bytes))
+        // The saved chunks one by one: no buffer of the whole progress.
+        let tiles = 0
+        for (const chunk of msg.chunks) {
+          const n = rx.importState(new Uint8Array(chunk))
+          if (n < 0) {
+            tiles = -1
+            break
+          }
+          tiles += n
+        }
         post({ type: 'imported', tiles, generation: msg.generation, stats: rx.stats() })
         return
       }

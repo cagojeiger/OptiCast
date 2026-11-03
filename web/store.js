@@ -2,16 +2,17 @@
 // Resume support (docs/web.md §4): the collected tiles of an unfinished
 // transfer are kept in IndexedDB under its transfer ID, in this browser only.
 //
-// Two object stores: `meta` (small records, read for eviction) and `tiles` (the
-// export bytes). Entries older than 7 days, or beyond 128 MiB in total (oldest
-// first), are evicted; a corrupt entry is deleted when it is loaded.
+// Two object stores: `meta` (one small record per transfer, read for eviction) and
+// `chunks` (the exports appended to it, each holding the tiles collected since the
+// previous one, keyed `<id>:<seq>`). Entries older than 7 days, or beyond 128 MiB in
+// total (oldest first), are evicted; a corrupt entry is deleted when it is loaded.
 // A third, `files`, holds the last verified file until it is shared, replaced or
 // reset, for a day at most. (Every Pages site of one account shares this origin.)
 
 const DB = 'diodecam-v2'
-const VERSION = 3
+const VERSION = 4
 const META = 'meta'
-const TILES = 'tiles'
+const CHUNKS = 'chunks'
 const FILES = 'files'
 const MAX_AGE_MS = 7 * 24 * 3600 * 1000
 /** The received file is kept for a day: it covers a closed tab, not storage. */
@@ -24,9 +25,10 @@ const TILE_BYTES = 108
  * @property {string} id
  * @property {string} name
  * @property {number} size
- * @property {number} savedAt
- * @property {number} tiles Tiles in the export.
- * @property {number} bytes
+ * @property {number} savedAt When the last chunk was appended.
+ * @property {number} tiles Tiles in all its chunks.
+ * @property {number} bytes Bytes of all its chunks.
+ * @property {number} chunks Chunks appended: their keys are `<id>:<seq>` for seq 0 to chunks − 1.
  */
 
 /**
@@ -71,16 +73,6 @@ export function evictable(entries, now, keep) {
 }
 
 /**
- * Whether a new export of `count` tiles may replace the `stored` entry: never
- * with fewer tiles (an export made while saved tiles were being re-imported).
- * @param {SavedMeta | undefined} stored
- * @param {number} count
- */
-export function shouldSave(stored, count) {
-  return !stored || stored.tiles <= count
-}
-
-/**
  * Whether the kept file may still be offered: received at most a day ago, with its bytes as a Blob.
  * @param {KeptFile | undefined} file
  * @param {number} now
@@ -96,10 +88,12 @@ function open() {
     const req = indexedDB.open(DB, VERSION)
     req.onupgradeneeded = (event) => {
       const db = req.result
-      if (event.oldVersion < 2) {
-        for (const name of Array.from(db.objectStoreNames)) db.deleteObjectStore(name) // v1 layout
+      if (event.oldVersion < 2) for (const name of Array.from(db.objectStoreNames)) db.deleteObjectStore(name) // v1 layout
+      if (event.oldVersion < 4) {
+        // v2–3 saved one whole export per transfer; that progress is dropped once.
+        for (const name of ['tiles', META]) if (db.objectStoreNames.contains(name)) db.deleteObjectStore(name)
         db.createObjectStore(META, { keyPath: 'id' })
-        db.createObjectStore(TILES)
+        db.createObjectStore(CHUNKS)
       }
       if (!db.objectStoreNames.contains(FILES)) db.createObjectStore(FILES, { keyPath: 'id' })
     }
@@ -109,15 +103,15 @@ function open() {
 }
 
 /**
- * Runs `body` in one transaction over `meta` and `tiles` (or `files` alone);
+ * Runs `body` in one transaction over `meta` and `chunks` (or `files` alone);
  * resolves with what its returned getter reads once the transaction completes.
  * @template T
  * @param {IDBTransactionMode} mode
- * @param {(meta: IDBObjectStore, tiles: IDBObjectStore) => () => T} body
+ * @param {(meta: IDBObjectStore, chunks: IDBObjectStore) => () => T} body
  * @param {string[]} [stores]
  * @returns {Promise<T>}
  */
-async function transaction(mode, body, stores = [META, TILES]) {
+async function transaction(mode, body, stores = [META, CHUNKS]) {
   const db = await open()
   try {
     return await new Promise((resolve, reject) => {
@@ -133,57 +127,77 @@ async function transaction(mode, body, stores = [META, TILES]) {
   }
 }
 
-/** @param {string} id */
+/**
+ * Key of chunk `seq` of transfer `id`: fixed-width, so the keys sort in the order appended.
+ * @param {string} id
+ * @param {number} seq
+ */
+const chunkKey = (id, seq) => `${id}:${String(seq).padStart(8, '0')}`
+/**
+ * Every chunk key of transfer `id` (`:` is followed by `;`).
+ * @param {string} id
+ */
+const chunkRange = (id) => IDBKeyRange.bound(`${id}:`, `${id};`, false, true)
+
+/**
+ * Deletes the saved entry for `id`, all its chunks included.
+ * @param {string} id
+ */
 export async function remove(id) {
-  await transaction('readwrite', (meta, tiles) => {
+  await transaction('readwrite', (meta, chunks) => {
     meta.delete(id)
-    tiles.delete(id)
+    chunks.delete(chunkRange(id))
     return () => undefined
   })
 }
 
 /**
- * The saved entry for `id`; a malformed one is deleted and reported as absent.
+ * The saved entry for `id` with its chunks in the order appended (each an export, to be
+ * imported one by one); a malformed one is deleted and reported as absent.
  * @param {string} id
- * @returns {Promise<(SavedMeta & { data: ArrayBuffer }) | undefined>}
+ * @returns {Promise<(SavedMeta & { data: ArrayBuffer[] }) | undefined>}
  */
 export async function load(id) {
-  const [m, data] = await transaction('readonly', (meta, tiles) => {
+  const [m, data] = await transaction('readonly', (meta, chunks) => {
     const a = meta.get(id)
-    const b = tiles.get(id)
-    return () => [/** @type {SavedMeta | undefined} */ (a.result), b.result]
+    const b = chunks.getAll(chunkRange(id))
+    return () => [/** @type {SavedMeta | undefined} */ (a.result), /** @type {unknown[]} */ (b.result)]
   })
-  if (!m && data === undefined) return undefined
-  const count = exportTiles(data)
-  if (!m || count < 0 || count !== m.tiles) {
+  if (!m && !data.length) return undefined
+  const counts = data.map(exportTiles)
+  if (!m || data.length !== m.chunks || counts.some((n) => n < 0) || counts.reduce((a, b) => a + b, 0) !== m.tiles) {
     await remove(id)
     return undefined
   }
-  return { ...m, data }
+  return { ...m, data: /** @type {ArrayBuffer[]} */ (data) }
 }
 
 /**
- * Saves an export, then evicts old or excess entries (never this one). With `only`, it is
- * written only if `only(stored)` holds for the entry stored under its id, read in the same
- * readwrite transaction as the write: no other transaction on these stores (a reset's
- * `remove`) can run between the decision and the put.
- * @param {{ id: string, name: string, size: number, savedAt: number, data: ArrayBuffer }} entry
+ * Appends an export (the tiles collected since the previous one) to the saved entry for
+ * `entry.id`, then evicts old or excess entries (never this one). The stored record is read,
+ * and the chunk and the updated record written, in one readwrite transaction; with `only`,
+ * nothing is written unless `only(stored)` holds, decided in that transaction: no other
+ * transaction on these stores (a reset's `remove`) can run between the decision and the put.
+ * @param {{ id: string, name: string, size: number, savedAt: number }} entry
+ * @param {ArrayBuffer} chunk
  * @param {{ only?: (stored: SavedMeta | undefined) => boolean }} [options]
- * @returns {Promise<boolean>} Whether the entry was written.
+ * @returns {Promise<boolean>} Whether the chunk was written.
  */
-export async function save(entry, { only } = {}) {
-  const tiles = exportTiles(entry.data)
-  if (tiles < 0) return false
-  /** @type {SavedMeta} */
-  const record = { id: entry.id, name: entry.name, size: entry.size, savedAt: entry.savedAt, tiles, bytes: entry.data.byteLength }
-  const written = await transaction('readwrite', (meta, store) => {
+export async function append(entry, chunk, { only } = {}) {
+  const tiles = exportTiles(chunk)
+  if (tiles <= 0) return false
+  const written = await transaction('readwrite', (meta, chunks) => {
     let put = false
     const req = meta.get(entry.id)
     // Requests made in a success callback belong to the same transaction.
     req.onsuccess = () => {
-      if (only && !only(/** @type {SavedMeta | undefined} */ (req.result))) return
+      const stored = /** @type {SavedMeta | undefined} */ (req.result)
+      if (only && !only(stored)) return
+      const seq = stored?.chunks ?? 0
+      chunks.put(chunk, chunkKey(entry.id, seq))
+      /** @type {SavedMeta} */
+      const record = { id: entry.id, name: entry.name, size: entry.size, savedAt: entry.savedAt, tiles: (stored?.tiles ?? 0) + tiles, bytes: (stored?.bytes ?? 0) + chunk.byteLength, chunks: seq + 1 }
       meta.put(record)
-      store.put(entry.data, entry.id)
       put = true
     }
     return () => put
@@ -200,10 +214,10 @@ export async function evict(keep = null) {
   })
   const doomed = evictable(all, Date.now(), keep)
   if (!doomed.length) return
-  await transaction('readwrite', (meta, tiles) => {
+  await transaction('readwrite', (meta, chunks) => {
     for (const id of doomed) {
       meta.delete(id)
-      tiles.delete(id)
+      chunks.delete(chunkRange(id))
     }
     return () => undefined
   })
