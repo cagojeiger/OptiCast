@@ -1,164 +1,164 @@
-# DiodeCam 프로토콜 — 화면 형식
+# DiodeCam protocol: screen format
 
-송신기(터미널)와 수신기(폰)가 함께 지켜야 할 비트 단위 규격이다. 송신기 동작은 [`cli.md`](cli.md),
-수신기 동작은 [`web.md`](web.md), 결정의 이유는 [`adr/`](adr/README.md)에 있다.
-정수는 모두 big-endian이다. "모듈"은 화면 격자의 점 하나이고, 값 1은 터미널 글자색, 0은 바탕색이다.
+This is the bit-level specification that the sender (terminal) and the receiver (phone) must both follow. Sender behavior is in [`cli.md`](cli.md),
+receiver behavior is in [`web.md`](web.md), and the reasons for the decisions are in [`adr/`](adr/README.md).
+All integers are big-endian. A "module" is one dot of the screen grid. Value 1 is the terminal foreground color and 0 is the background color.
 
-## 1. 프로필과 격자 크기
+## 1. Profiles and grid size
 
-터미널 크기 C×R에서 아래 2줄은 상태 줄이다([`cli.md`](cli.md)). 격자는 W×H 모듈이다.
+For a terminal of C×R cells, the bottom 2 rows are status lines ([`cli.md`](cli.md)). The grid is W×H modules.
 
-| 프로필 | W | H | 칸 ↔ 모듈 |
+| Profile | W | H | Cell ↔ module |
 |---|---|---|---|
-| `ssh` (기본) | min(C − 1, 511) | min(2·(R − 2), 510) | 칸 하나 = 위·아래 모듈 2개 |
-| `vt100` | min(C − 1, 511) | min(R − 2, 511) | 칸 하나 = 모듈 1개 |
+| `ssh` (default) | min(C − 1, 511) | min(2·(R − 2), 510) | one cell = 2 modules, upper and lower |
+| `vt100` | min(C − 1, 511) | min(R − 2, 511) | one cell = 1 module |
 
-`auto`는 `ssh`를 쓴다. 단, `$TMUX`나 `$STY`가 있고 로캘(`LC_ALL` → `LC_CTYPE` → `LANG` 중 처음 설정된 값)에
-`UTF-8`/`utf8`이 없으면 경고하고 `vt100`을 쓴다. 마지막 열은 항상 비운다(자동 줄바꿈 대기 상태 회피).
+`auto` uses `ssh`. The exception is when `$TMUX` or `$STY` is set and the locale (the first value set among `LC_ALL` → `LC_CTYPE` → `LANG`)
+does not contain `UTF-8`/`utf8`. In that case it prints a warning and uses `vt100`. The last column is always left empty (to avoid the pending-wrap state).
 
-### 1.1 칸 그리기
+### 1.1 Drawing a cell
 
-`ssh`. 아래 모듈은 항상 칸 바탕색이다.
+`ssh`. The lower module is always the cell background.
 
-| 위 | 아래 | 출력 |
+| Upper | Lower | Output |
 |---|---|---|
-| 0 | 0 | `' '` (반전 끔) |
-| 1 | 1 | `' '` (반전 켬) |
-| 1 | 0 | `'▀'` (반전 끔) |
-| 0 | 1 | `'▀'` (반전 켬) |
+| 0 | 0 | `' '` (reverse off) |
+| 1 | 1 | `' '` (reverse on) |
+| 1 | 0 | `'▀'` (reverse off) |
+| 0 | 1 | `'▀'` (reverse on) |
 
-`vt100`: 0은 `' '`(반전 끔), 1은 `' '`(반전 켬).
+`vt100`: 0 is `' '` (reverse off), 1 is `' '` (reverse on).
 
-반전은 `ESC[7m`, 해제는 `ESC[m`이고 값이 바뀔 때만 보낸다. 행마다 `ESC[{row};1H`로 시작하고 행 끝에서 `ESC[m`을 보낸다.
-색 코드는 쓰지 않는다.
+Reverse video on is `ESC[7m` and off is `ESC[m`. It is sent only when the value changes. Each row starts with `ESC[{row};1H` and ends with `ESC[m`.
+No color codes are used.
 
-### 1.2 프레임 출력
+### 1.2 Frame output
 
 ```
-ESC[?2026h  격자 행들  상태 줄 2개  ESC[?2026l       ← 한 번의 write
+ESC[?2026h  grid rows  2 status lines  ESC[?2026l       ← one write
 ```
 
-시작할 때 `ESC[m ESC[?1049h ESC[?25l ESC[?7l ESC[2J`를 보내고, 끝낼 때 `ESC[?2026l ESC[m ESC[?7h ESC[?25h ESC[?1049l`로 되돌린다.
-프레임을 쓰다 실패해도 터미널이 동기화 출력 상태에 남지 않도록 끝낼 때 `?2026l`을 먼저 보낸다.
-배치나 터미널 크기가 바뀌면 그 프레임 앞(`ESC[?2026h` 앞, 같은 write 안)에 `ESC[2J`를 보낸다.
-각 행은 반전 끔 상태에서 시작한다고 보고 쓴다(앞 행이 `ESC[m`으로 끝나고, 상태 줄은 SGR을 쓰지 않는다).
+At start-up, send `ESC[m ESC[?1049h ESC[?25l ESC[?7l ESC[2J`. On exit, restore with `ESC[?2026l ESC[m ESC[?7h ESC[?25h ESC[?1049l`.
+`?2026l` is sent first on exit so the terminal does not stay in synchronized-output mode if a frame write fails.
+When the layout or the terminal size changes, send `ESC[2J` before that frame (before `ESC[?2026h`, in the same write).
+Each row is written assuming it starts with reverse off (the previous row ends with `ESC[m`, and the status lines use no SGR).
 
-## 2. 격자 배치 (좌표 원점은 왼쪽 위, x = 열, y = 행)
+## 2. Grid layout (origin at top left, x = column, y = row)
 
-### 2.1 여백
+### 2.1 Margin
 
-x = 0, x = W − 1, y = 0, y = H − 1은 모두 0이다.
+x = 0, x = W − 1, y = 0, and y = H − 1 are all 0.
 
-### 2.2 위치 표식
+### 2.2 Finders
 
-큰 표식(7×7): 칸 (i, j) ∈ [0,7)²에서 d = max(|i − 3|, |j − 3|)이 3, 1, 0이면 1, 2이면 0.
-작은 표식(5×5): d = max(|i − 2|, |j − 2|)가 2, 0이면 1, 1이면 0.
-각 표식은 둘레 1모듈의 0(분리대)으로 감싼다.
+Large finder (7×7): for cell (i, j) ∈ [0,7)², with d = max(|i − 3|, |j − 3|), the module is 1 if d is 3, 1, or 0, and 0 if d is 2.
+Small finder (5×5): with d = max(|i − 2|, |j − 2|), the module is 1 if d is 2 or 0, and 0 if d is 1.
+Each finder is surrounded by a 1-module border of 0 (the separator).
 
-| 표식 | 왼쪽 위 (x0, y0) | 분리대 포함 영역 |
+| Finder | Top left (x0, y0) | Area including separator |
 |---|---|---|
-| TL 큰 | (2, 2) | x, y ∈ [1, 9] |
-| TR 큰 | (W − 9, 2) | x ∈ [W − 10, W − 2], y ∈ [1, 9] |
-| BL 큰 | (2, H − 9) | x ∈ [1, 9], y ∈ [H − 10, H − 2] |
-| BR 작은 | (W − 7, H − 7) | x ∈ [W − 8, W − 2], y ∈ [H − 8, H − 2] |
+| TL large | (2, 2) | x, y ∈ [1, 9] |
+| TR large | (W − 9, 2) | x ∈ [W − 10, W − 2], y ∈ [1, 9] |
+| BL large | (2, H − 9) | x ∈ [1, 9], y ∈ [H − 10, H − 2] |
+| BR small | (W − 7, H − 7) | x ∈ [W − 8, W − 2], y ∈ [H − 8, H − 2] |
 
-### 2.3 타이밍 줄
+### 2.3 Timing lines
 
-1과 0이 번갈아 나온다. 시작 좌표에서 1이다.
+1 and 0 alternate. The module at the start coordinate is 1.
 
-| 줄 | 위치 | 범위 |
+| Line | Position | Range |
 |---|---|---|
-| 위 | y = 5 | x ∈ [10, W − 11] |
-| 아래 | y = H − 6 | x ∈ [10, W − 9] |
-| 왼쪽 | x = 5 | y ∈ [10, H − 11] |
-| 오른쪽 | x = W − 6 | y ∈ [10, H − 9] |
+| Top | y = 5 | x ∈ [10, W − 11] |
+| Bottom | y = H − 6 | x ∈ [10, W − 9] |
+| Left | x = 5 | y ∈ [10, H − 11] |
+| Right | x = W − 6 | y ∈ [10, H − 9] |
 
-### 2.4 형식 정보 (FI)
+### 2.4 Format information (FI)
 
-32비트 워드, 비트 31(MSB)부터:
+A 32-bit word, from bit 31 (MSB):
 
-| 비트 | 내용 |
+| Bits | Content |
 |---|---|
-| 31..29 | 버전 = 2 |
-| 28..27 | 프로필 (0 = ssh, 1 = vt100) |
+| 31..29 | Version = 2 |
+| 28..27 | Profile (0 = ssh, 1 = vt100) |
 | 26..18 | W |
 | 17..9 | H |
-| 8 | 0 (예약) |
-| 7..0 | CRC-8 (다항식 0x07, 초기값 0) — 비트 31..8을 3바이트로 보고 계산 |
+| 8 | 0 (reserved) |
+| 7..0 | CRC-8 (polynomial 0x07, initial value 0), computed over bits 31..8 as 3 bytes |
 
-워드를 세 번 이어 붙인 96비트를 두 곳에 쓴다(비트 0 = 첫 워드의 MSB). 수신기는 비트별 다수결 후 CRC로 확인한다.
+The word is repeated three times to make 96 bits, and these are written in two places (bit 0 = MSB of the first word). The receiver takes a bitwise majority vote and then checks the CRC.
 
-- 위쪽: y = 2에 비트 0..47, y = 3에 비트 48..95, x ∈ [10, 57]
-- 아래쪽: y = H − 4에 비트 0..47, y = H − 3에 비트 48..95, x ∈ [10, 57]
+- Top: bits 0..47 at y = 2 and bits 48..95 at y = 3, x ∈ [10, 57]
+- Bottom: bits 0..47 at y = H − 4 and bits 48..95 at y = H − 3, x ∈ [10, 57]
 
-### 2.5 데이터 모듈과 최소 크기
+### 2.5 Data modules and minimum size
 
-2.1~2.4에 속하지 않는 모든 모듈이 데이터 모듈이다. 행 우선(y 바깥, x 안쪽) 순서로 번호를 매긴다.
-데이터 모듈 수를 D라 하면 프레임당 타일 수는 N = ⌊D / 1024⌋다.
-W ≥ 68, H ≥ 20이고 N ≥ 2여야 한다. 아니면 송신기는 격자 대신 `Terminal too small for DiodeCam (…)`와 `Minimum size: …`를 표시한다.
-H ≥ 20은 위쪽 고정 영역(y ≤ 9)과 아래쪽 고정 영역(y ≥ H − 10)이 겹치지 않게 하는 조건이다.
-W가 크면 H < 20에서도 N ≥ 2가 될 수 있으므로 따로 둔다(예: `ssh` 512×11, `vt100` 512×21).
+Every module not covered by 2.1 to 2.4 is a data module. They are numbered in row-major order (y outer, x inner).
+If D is the number of data modules, the number of tiles per frame is N = ⌊D / 1024⌋.
+W ≥ 68, H ≥ 20, and N ≥ 2 are required. Otherwise the sender shows `Terminal too small for DiodeCam (…)` and `Minimum size: …` instead of the grid.
+H ≥ 20 ensures that the fixed area at the top (y ≤ 9) and the fixed area at the bottom (y ≥ H − 10) do not overlap.
+When W is large, N ≥ 2 can hold even with H < 20, so this is a separate condition (for example `ssh` 512×11, `vt100` 512×21).
 
-## 3. 타일
+## 3. Tiles
 
-타일 n(0 ≤ n < N)은 데이터 모듈 [1024n, 1024n + 1024)을 쓴다. 128바이트이고 바이트마다 MSB부터 모듈에 놓는다.
-남는 데이터 모듈(D − 1024N개)에는 n = N인 백색화 비트열을 그대로 쓴다.
+Tile n (0 ≤ n < N) uses data modules [1024n, 1024n + 1024). It is 128 bytes, and each byte is placed on the modules starting from the MSB.
+The remaining data modules (D − 1024N of them) are filled with the whitening bit stream for n = N, as is.
 
-**백색화.** 타일 바이트는 xorshift32 수열과 XOR한다. 상태 s₀ = 0x6F707463 ⊕ (0x9E3779B9 · (n + 1) mod 2³²)이고,
-s₀ = 0이면 1로 바꾼다. 한 걸음은 s ^= s << 13; s ^= s >> 17; s ^= s << 5이고, 바이트 k에는 k + 1번째 걸음의 하위 8비트를 쓴다.
-파일 내용과 상관없이 화면이 항상 고른 잡음처럼 보이게 하고, 큰 덩어리가 위치 표식처럼 보이는 것을 막는다.
+**Whitening.** The tile bytes are XORed with an xorshift32 sequence. The state is s₀ = 0x6F707463 ⊕ (0x9E3779B9 · (n + 1) mod 2³²),
+and if s₀ = 0 it is replaced by 1. One step is s ^= s << 13; s ^= s >> 17; s ^= s << 5, and byte k uses the low 8 bits after the (k + 1)-th step.
+This makes the screen always look like uniform noise regardless of the file content, and it prevents large blocks from looking like finders.
 
-**RS 부호.** 백색화 전 128바이트 = 데이터 108바이트 + Reed–Solomon 패리티 20바이트.
-GF(2⁸), 원시 다항식 0x11D, 첫 근 α⁰(`reed-solomon` 크레이트 0.2.1 기본값)이다.
-오류 10바이트 또는 소실 20바이트까지 고친다.
+**RS code.** The 128 bytes before whitening = 108 data bytes + 20 Reed–Solomon parity bytes.
+GF(2⁸), primitive polynomial 0x11D, first root α⁰ (the default of the `reed-solomon` crate 0.2.1).
+It corrects up to 10 byte errors or 20 byte erasures.
 
-**데이터 108바이트.**
+**108 data bytes.**
 
-| 오프셋 | 크기 | 내용 |
+| Offset | Size | Content |
 |---|---|---|
-| 0 | 1 | 종류: 1 = DATA, 2 = META |
-| 1 | 1 | 플래그 (0) |
-| 2 | 2 | 태그 = 전송 ID 하위 16비트 |
-| 4 | 1 | SBN (RaptorQ 원본 블록 번호) |
-| 5 | 3 | ESI (RaptorQ 조각 번호, 24비트) |
-| 8 | 96 | 내용: DATA는 RaptorQ 조각, META는 4절 |
-| 104 | 4 | CRC-32C (Castagnoli), 오프셋 0..104 |
+| 0 | 1 | Kind: 1 = DATA, 2 = META |
+| 1 | 1 | Flags (0) |
+| 2 | 2 | Tag = low 16 bits of the transfer ID |
+| 4 | 1 | SBN (RaptorQ source block number) |
+| 5 | 3 | ESI (RaptorQ encoding symbol ID, 24 bits) |
+| 8 | 96 | Payload: a RaptorQ symbol for DATA, section 4 for META |
+| 104 | 4 | CRC-32C (Castagnoli) over offsets 0..104 |
 
-META 타일의 SBN과 ESI는 0이다.
+SBN and ESI of a META tile are 0.
 
-## 4. META 내용 (96바이트)
+## 4. META content (96 bytes)
 
-| 오프셋 | 크기 | 내용 |
+| Offset | Size | Content |
 |---|---|---|
-| 0 | 4 | 전송 ID = CRC-32C(META[4..96]) |
-| 4 | 8 | 원본 파일 크기 |
-| 12 | 32 | 원본 SHA-256 |
-| 44 | 1 | 압축: 0 = 없음, 1 = deflate-raw |
-| 45 | 12 | RaptorQ OTI (RFC 6330 직렬화, `ObjectTransmissionInformation::serialize`) |
-| 57 | 1 | 파일 이름 길이 L (≤ 38) |
-| 58 | 38 | 파일 이름 UTF-8 (L바이트, 나머지는 0) |
+| 0 | 4 | Transfer ID = CRC-32C(META[4..96]) |
+| 4 | 8 | Original file size |
+| 12 | 32 | SHA-256 of the original |
+| 44 | 1 | Compression: 0 = none, 1 = deflate-raw |
+| 45 | 12 | RaptorQ OTI (RFC 6330 serialization, `ObjectTransmissionInformation::serialize`) |
+| 57 | 1 | File name length L (≤ 38) |
+| 58 | 38 | File name in UTF-8 (L bytes, the rest are 0) |
 
-- 전송 ID는 파일 내용과 설정에만 의존한다. 같은 파일을 같은 설정으로 다시 보내면 같은 ID이므로 재시작 전후 조각을 합칠 수 있다.
-- 파일 이름은 기본 이름(경로 제외)만 쓴다. 38바이트를 넘으면 확장자를 살리고 앞부분(확장자 앞)의 끝을 UTF-8 문자 경계에서 자른다.
-  확장자는 마지막 `.`부터(첫 글자인 `.`은 제외)이고, 확장자가 38바이트 이상이거나 확장자를 살리면 앞부분이 비게 되면
-  확장자 없이 이름 전체를 자른다(`.eee…` 같은 숨김 파일 이름이 되지 않도록).
-- deflate 결과가 원본보다 작을 때만 압축한다.
+- The transfer ID depends only on the file content and the settings. Sending the same file again with the same settings gives the same ID, so symbols from before and after a restart can be combined.
+- Only the base name (without the path) is used as the file name. If it exceeds 38 bytes, the extension is kept and the end of the part before the extension is cut at a UTF-8 character boundary.
+  The extension starts at the last `.` (a `.` in the first position does not count). If the extension is 38 bytes or longer, or keeping it would leave the leading part empty,
+  the whole name is cut without keeping the extension (so the result is not a hidden file name like `.eee…`).
+- The data is compressed only if the deflate output is smaller than the original.
 
-## 5. 조각 순서
+## 5. Symbol order
 
-- RaptorQ 조각 크기 T = 96, 정렬 Al = 8. 블록 수 Z와 부블록 수 N은 `ObjectTransmissionInformation::with_defaults(F, 96)`을 따른다
-  (Z = ⌈K / 56403⌉, 부블록 1개). Z ≤ 255이므로 F는 255 · 56403 · 96바이트(약 1.38 GB) 이하다.
-- 원본 패스: 모든 블록의 원본 조각(ESI < K_b)을 블록 순환 순서로 한 번씩 보낸다.
-- 복구: ESI = K_b + r₀ + i (블록 순환)로 계속 보낸다. r₀는 시작할 때 고르는 [0, 2²⁰) 범위의 난수이고, ESI가 2²⁴에 닿으면 K_b로 돌아간다.
-- META: 프레임 f의 타일 중 하나가 META다. 간격 m = max(1, ⌈10 / N⌉) 프레임마다(f mod m = 0인 프레임) 넣고, 위치는 타일 f mod N이다.
-  f는 송신 시작부터 그린 프레임 번호(0부터)이고, N과 m은 그 프레임의 배치에서 계산한다.
-  같은 화면 영역(반사광 등)에서만 META를 잃지 않도록 위치를 돌린다.
-- 빈 파일: OTI 12바이트를 모두 0(F = 0)으로 두고, 보낼 조각이 없으므로 모든 프레임의 모든 타일이 META다.
-  수신기는 META만으로 완료한다(크기 0, 빈 입력의 SHA-256 확인).
+- RaptorQ symbol size T = 96, alignment Al = 8. The number of blocks Z and sub-blocks N follow `ObjectTransmissionInformation::with_defaults(F, 96)`
+  (Z = ⌈K / 56403⌉, one sub-block). Since Z ≤ 255, F is at most 255 · 56403 · 96 bytes (about 1.38 GB).
+- Source pass: the source symbols of all blocks (ESI < K_b) are sent once each, in round-robin block order.
+- Repair: sending continues with ESI = K_b + r₀ + i (round-robin over blocks). r₀ is a random number in [0, 2²⁰) chosen at start, and when ESI reaches 2²⁴ it wraps back to K_b.
+- META: one of the tiles of frame f is a META tile. It is inserted every m = max(1, ⌈10 / N⌉) frames (frames where f mod m = 0), at tile position f mod N.
+  f is the frame number counted from the start of transmission (from 0), and N and m are computed from the layout of that frame.
+  The position rotates so that META is not always lost in the same screen area (for example, to glare).
+- Empty file: the 12 OTI bytes are all 0 (F = 0). There are no symbols to send, so every tile of every frame is a META tile.
+  The receiver completes from META alone (size 0, checking the SHA-256 of empty input).
 
-## 6. 수신 규칙 (요약)
+## 6. Receive rules (summary)
 
-1. 위치 표식 → 형식 정보(W, H, 프로필) → 격자 샘플링 → 타일별 백색화 해제 → RS → CRC → 종류·태그 확인.
-2. META: 전송 ID 검증. 다른 ID의 META가 확정된 뒤에 오면 "다른 전송"으로만 센다.
-3. DATA: (SBN, ESI)로 중복을 제거하고 RaptorQ 디코더에 넣는다.
-4. 복원 → (압축이면) 선언 크기를 상한으로 inflate → SHA-256 일치 시에만 저장한다.
+1. Finders → format information (W, H, profile) → grid sampling → per-tile de-whitening → RS → CRC → check kind and tag.
+2. META: verify the transfer ID. A META with a different ID that arrives after one has been confirmed is only counted as "another transfer".
+3. DATA: remove duplicates by (SBN, ESI) and feed the symbol to the RaptorQ decoder.
+4. Reconstruct → (if compressed) inflate with the declared size as the upper limit → save only if the SHA-256 matches.

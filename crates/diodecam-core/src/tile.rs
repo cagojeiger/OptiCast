@@ -27,7 +27,7 @@ pub enum TileKind {
     Meta = 2,
 }
 
-/// A decoded tile (spec §3, "데이터 108바이트").
+/// A decoded tile (spec §3, "108 data bytes").
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Tile {
     pub kind: TileKind,

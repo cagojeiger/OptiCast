@@ -1,36 +1,36 @@
-# ADR 0003: 구현 — Rust 공유 코어, 의존성 최소 CLI, 빌드 없는 웹 수신기
+# ADR 0003: Implementation — shared Rust core, minimal-dependency CLI, no-build web receiver
 
 - Status: Accepted
 - Date: 2026-11-01
 
 ## Context
 
-송신기는 런타임을 들이기 어려운 격리 서버(배포판·glibc·아키텍처가 제각각)에서 돌고, 수신기는 앱 설치 없는
-아이폰 Safari에서 돈다. 그리는 형식과 읽는 형식이 어긋나면 안 된다. 기술은 최소로 유지한다.
+The sender runs on isolated servers where installing a runtime is hard (distributions, glibc versions, and architectures all differ), and the receiver runs in
+iPhone Safari with no app install. The format that is drawn and the format that is read must not diverge. Technology is kept to a minimum.
 
 ## Decision
 
-- **Rust 공유 코어** `diodecam-core`(I/O 없음): 배치, 타일, RS, RaptorQ, META, ANSI, 수신 조립. 송신 CLI와 수신 WASM이 같은 코드를 쓴다.
-- **CLI** 의존성은 `crossterm`(raw 모드와 터미널 크기만, 이벤트 기능 끔)과 `signal-hook`뿐이다. 인자는 직접 파싱하고,
-  키 입력은 stdin 스레드, 창 크기 변경은 SIGWINCH로 받는다. stdin이 EOF면 터미널이 사라진 것이므로 끝낸다.
-- **수신기**는 빌드 단계 없는 순수 JS ES 모듈 + Web Worker + WASM(C ABI, wasm-bindgen 없음)이다.
-  비전(국소 평균 이진화, 런 길이 표식 탐색, 4점 호모그래피, 추적)은 외부 의존 없이 직접 만든다. 타입은 JSDoc + `tsc`로만 검사한다.
-- **안전**: SHA-256 확인 전에는 저장 버튼이 비활성이다. META 크기는 메모리를 잡기 전에 상한(기본 64 MiB, `?max=` 최대 512)과 비교한다.
-  받은 조각과 검증된 파일은 IndexedDB에 저장해 새로고침 뒤 이어 받거나 다시 저장한다. 아무것도 업로드하지 않는다.
-- **홈 화면 앱**: manifest + 서비스 워커. 캐시 이름이 커밋이라 배포 사이에 파일이 섞이지 않고, 오프라인에서도 열린다.
-- **배포**: `main` push → 테스트 통과 후 GitHub Pages(WASM 빌드 + 파일 복사), `v*` 태그 → GitHub Releases(musl 정적 + macOS, 버전 없는 파일 이름).
+- **Shared Rust core** `diodecam-core` (no I/O): layout, tiles, RS, RaptorQ, META, ANSI, receive assembly. The sender CLI and the receiver WASM use the same code.
+- The **CLI** depends only on `crossterm` (raw mode and terminal size only, event feature off) and `signal-hook`. Arguments are parsed by hand,
+  key input comes from a stdin thread, and window resizes come from SIGWINCH. If stdin reaches EOF the terminal is gone, so the program exits.
+- The **receiver** is plain JS ES modules with no build step + a Web Worker + WASM (C ABI, no wasm-bindgen).
+  Vision (local-mean binarization, run-length finder search, 4-point homography, tracking) is built in-house with no external dependencies. Types are checked only with JSDoc + `tsc`.
+- **Safety**: the save button is disabled until the SHA-256 is verified. The META size is compared with the limit (default 64 MiB, up to 512 with `?max=`) before any memory is allocated.
+  Received symbols and verified files are stored in IndexedDB so a reload can resume the transfer or save the file again. Nothing is uploaded.
+- **Home-screen app**: manifest + service worker. The cache name is the commit, so files from different deployments never mix, and it opens offline too.
+- **Deployment**: push to `main` → GitHub Pages after tests pass (WASM build + file copy); `v*` tag → GitHub Releases (static musl + macOS, file names without versions).
 
 ## Rationale
 
-- Node/Python은 서버에 런타임이 필요하고, Go는 브라우저와 코어를 공유하기 어렵다. Rust는 정적 바이너리와 wasm32를 둘 다 준다.
-- `clap`은 옵션 4개짜리 CLI에 crate 십여 개를 더한다. crossterm 이벤트(mio)는 터미널이 사라지면 EOF에서 무한 반복한다
-  (0.28.1, upstream 미수정. 실제로 고아 프로세스가 CPU 100%로 4시간 남았다). 둘과 `libc`를 빼서 의존 crate 49 → 29, 바이너리 1.08 MB → 752 KB.
-- Vite·번들러·TS 빌드는 브라우저가 ES 모듈을 직접 실행하면 필요 없다. 정적 파일을 그대로 배포한다.
-- OpenCV.js(수 MB), zxing(QR 전용), AprilTag(C) 대신 자체 비전: 격자 구조를 알고 있어 할 일이 적다(1080p 전체 탐색 9.2 ms, 추적 1.7 ms).
+- Node/Python need a runtime on the server, and Go makes it hard to share the core with the browser. Rust gives both a static binary and wasm32.
+- `clap` adds a dozen or so crates to a CLI with 4 options. crossterm events (mio) loop forever on EOF when the terminal disappears
+  (0.28.1, not fixed upstream; an orphaned process actually stayed at 100% CPU for 4 hours). Removing both and `libc` cut dependency crates from 49 to 29 and the binary from 1.08 MB to 752 KB.
+- Vite, bundlers, and a TS build are unnecessary when the browser runs ES modules directly. Static files are deployed as they are.
+- Instead of OpenCV.js (several MB), zxing (QR only), or AprilTag (C), custom vision: the grid structure is known, so there is little to do (full 1080p search 9.2 ms, tracking 1.7 ms).
 
 ## Consequences
 
-- 규격 변경은 core 한 곳에서 송수신에 함께 반영된다.
-- 알려진 한계: 렌즈 왜곡 k1 > 0.018, 아이폰의 자동 렌즈 전환(가까이 찍을 때 초광각), 너무 작은 모듈(4.5 px 미만)에서 인식이 실패한다.
-  수신기가 실패 단계·모듈 크기를 보이고 단일 렌즈를 고를 수 있게 해서(`docs/web.md` 6절) 실기기에서 원인을 가린다.
-  웹이 막을 수 없는 것(렌즈 고정, 초점·노출 잠금)이 주 원인으로 확인되면 같은 C ABI를 쓰는 iOS 앱을 검토한다.
+- A spec change is made in one place in the core and applies to both sending and receiving.
+- Known limits: recognition fails with lens distortion k1 > 0.018, automatic lens switching on iPhone (ultra-wide when shooting close), and modules that are too small (under 4.5 px).
+  The receiver shows the failing stage and the module size and lets the user pick a single lens (`docs/web.md` section 6), so the cause can be identified on real devices.
+  If the main causes turn out to be things the web cannot control (lens lock, focus and exposure lock), an iOS app using the same C ABI will be considered.

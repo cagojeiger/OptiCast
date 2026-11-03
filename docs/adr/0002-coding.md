@@ -1,34 +1,34 @@
-# ADR 0002: 부호 — 타일 안 RS + CRC, 타일 간 RaptorQ, META
+# ADR 0002: Coding — RS + CRC inside a tile, RaptorQ across tiles, META
 
 - Status: Accepted
 - Date: 2026-11-01
 
 ## Context
 
-카메라는 모듈을 자주 잘못 읽고(흐림, 노이즈, 반사), 프레임을 통째로 놓친다(찢어짐, 화면 밖, 흔들림).
-단방향이라 빠진 조각을 다시 요청할 수 없고, 수신기는 언제 합류할지 모른다.
+The camera often misreads modules (blur, noise, glare) and misses whole frames (tearing, out of view, shake).
+The channel is one-way, so missing pieces cannot be requested again, and the receiver does not know when it will join.
 
 ## Decision
 
-- **타일 안**: 데이터 108 B(종류, 플래그, 태그, SBN, ESI, 내용 96 B, CRC-32C) + Reed–Solomon 패리티 20 B
-  (GF(2⁸), 0x11D). 바이트 오류 10개까지 고치고, CRC로 잘못 고쳐진 타일을 버린다. xorshift32로 백색화한다.
-- **타일 간**: RaptorQ(RFC 6330, `raptorq` =2.0.1, 조각 96 B). 원본 조각을 한 바퀴 보낸 뒤 여러 원본을 섞은
-  복구 조각을 끝없이 만든다(ESI = K_b + r₀ + i, r₀는 실행마다 무작위). 수신기는 아무 조각이나 K + 2개 모으면 복원한다.
-- **META**(전송 ID, 크기, SHA-256, 압축, OTI, 이름)를 m = max(1, ⌈10/N⌉) 프레임마다 타일 하나로 넣고 위치를 돌린다.
-  전송 ID = CRC-32C(META[4..])라 같은 파일을 다시 보내면 같은 ID다. deflate는 작아질 때만 쓴다.
-- 파일은 크기와 SHA-256이 모두 맞을 때만 내놓는다.
+- **Inside a tile**: 108 B of data (kind, flags, tag, SBN, ESI, 96 B payload, CRC-32C) + 20 B of Reed–Solomon parity
+  (GF(2⁸), 0x11D). It corrects up to 10 byte errors, and the CRC discards tiles that were corrected wrongly. Whitening uses xorshift32.
+- **Across tiles**: RaptorQ (RFC 6330, `raptorq` =2.0.1, 96 B symbols). After one pass of the source symbols, it generates repair symbols
+  that mix many sources, without end (ESI = K_b + r₀ + i, r₀ is random per run). The receiver reconstructs the file once it collects any K + 2 symbols.
+- **META** (transfer ID, size, SHA-256, compression, OTI, name) is inserted as one tile every m = max(1, ⌈10/N⌉) frames, and its position rotates.
+  The transfer ID = CRC-32C(META[4..]), so sending the same file again gives the same ID. Deflate is used only when it makes the data smaller.
+- The file is released only when both the size and the SHA-256 match.
 
 ## Rationale
 
-- 단순 반복(v1)은 마지막 조각을 기다리느라 여러 바퀴 돈다. K = 171,012, 손실 10%면 99% 완료에 7~8바퀴,
-  파운틴은 약 1.11바퀴다. 프레임 간 RS는 부호율이 고정되고, LT 부호는 추가 조각이 많고, Wirehair는 C++이다.
-- 원본을 하나도 못 받고 **복구 조각만 받아도 K개에서 풀린다**: K = 100 ~ 42,753에서 343회, 16.9 MB(4블록)에서도 추가 0개.
-  1시간·10시간 뒤 합류해도 복원했다.
-- RS 없이 CRC만 쓰면 모듈 몇 개 오류로 타일 대부분을 잃는다. 128 B 짧은 블록에는 LDPC보다 RS가 단순하고,
-  오류가 바이트 단위로 몰리므로 BCH보다 맞다.
+- Plain repetition (v1) takes several passes while waiting for the last piece. With K = 171,012 and 10% loss, 99% completion takes 7 to 8 passes,
+  while the fountain code takes about 1.11 passes. Inter-frame RS has a fixed code rate, LT codes need many extra symbols, and Wirehair is C++.
+- **Even if no source symbol is received and only repair symbols arrive, decoding works from K symbols**: 343 runs with K = 100 to 42,753, and 0 extra symbols even at 16.9 MB (4 blocks).
+  Joining 1 hour or 10 hours later also reconstructed the file.
+- With CRC only and no RS, a few module errors would lose most of a tile. For short 128 B blocks, RS is simpler than LDPC,
+  and it fits better than BCH because errors cluster in bytes.
 
 ## Consequences
 
-- 어떤 조각을 놓쳤는지는 상관없고 개수만 중요하다. 필요한 시간 = (K + 2) ÷ 초당 받는 조각 수.
-- 수신기는 블록 전체를 메모리에 둔다 → 크기 상한(기본 64 MiB). 조각 생성 규칙 호환을 위해 `raptorq`를 =2.0.1로 고정한다.
-- 16비트 태그가 우연히 같은 다른 전송(1/65,536)이 계속 보이면 완료가 늦어진다. 잘못된 파일은 SHA-256이 막는다.
+- Which symbols were missed does not matter, only the count. Time needed = (K + 2) ÷ symbols received per second.
+- The receiver keeps the whole block in memory → there is a size limit (default 64 MiB). `raptorq` is pinned to =2.0.1 to stay compatible with the symbol generation rules.
+- If a different transfer whose 16-bit tag happens to match (1/65,536) keeps being seen, completion is delayed. A wrong file is blocked by the SHA-256.

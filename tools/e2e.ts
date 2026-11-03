@@ -20,6 +20,9 @@
 //                          [--url URL]          (test a deployed receiver instead of building and serving web/)
 //                          [--resize-to CxR]    (terminal resized halfway through the clip, and back as it loops)
 //                          [--hold S]           (keep the browser open S seconds after the result; screenshots in dist/e2e)
+//                          [--shots DIR]        (README images: the setup page in both themes, and the receiver in a
+//                                                phone viewport while receiving and when done, without the debug overlay;
+//                                                use with --url <deployed> so the footer shows the real version)
 
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import type { AddressInfo } from 'node:net'
@@ -50,6 +53,7 @@ const { values: args } = parseArgs({
     url: { type: 'string' }, // receiver to test, e.g. https://cagojeiger.github.io/diodecam/ (default: local build)
     'resize-to': { type: 'string' }, // CxR: resize the terminal halfway through the clip
     hold: { type: 'string' }, // keep the browser open S seconds after the result (with --headed)
+    shots: { type: 'string' }, // directory for the README images
     'reload-after': { type: 'string' }, // reload the page after S seconds: progress must resume from IndexedDB
     headed: { type: 'boolean', default: false },
     keep: { type: 'boolean', default: false },
@@ -171,7 +175,19 @@ const browser = await chromium.launch({
 let exitCode = 1
 const result: Record<string, unknown> = { label, bytes: original.length, k, tiles, captures: video.frames, torn }
 try {
-  const context = await browser.newContext({ permissions: ['camera'], acceptDownloads: true })
+  const shots = args.shots ? resolve(args.shots) : null
+  if (shots) {
+    mkdirSync(shots, { recursive: true })
+    for (const scheme of ['light', 'dark'] as const) {
+      const desk = await browser.newPage({ viewport: { width: 1440, height: 900 }, colorScheme: scheme, locale: 'en-US' })
+      await desk.goto(url)
+      await desk.waitForTimeout(500)
+      await desk.screenshot({ path: resolve(shots, `setup-${scheme}.png`) })
+      await desk.close()
+    }
+  }
+  const phone = shots ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'en-US' } : {}
+  const context = await browser.newContext({ ...phone, permissions: ['camera'], acceptDownloads: true })
   const page = await context.newPage()
   let errors = 0
   const pageError = (text: string) => {
@@ -181,10 +197,18 @@ try {
   page.on('pageerror', (err) => pageError(`page error: ${err.message}`))
   page.on('console', (msg) => msg.type() === 'error' && pageError(`console: ${msg.text()}`))
   // Desktop Chrome would get the setup page: force the receiver.
-  await page.goto(`${url}?receiver=1&debug=1${args.scan ? `&scan=${args.scan}` : ''}`)
+  await page.goto(`${url}?receiver=1${shots ? '' : '&debug=1'}${args.scan ? `&scan=${args.scan}` : ''}`)
   // Stats live in a sheet; its text is readable without opening it.
   await page.getByTestId('start').click()
   const startedAt = Date.now()
+  if (shots) {
+    void page
+      .locator('[data-testid="strip"][data-state="receiving"]')
+      .waitFor({ timeout: 60_000 })
+      .then(() => page.waitForTimeout(5000)) // about 40 % in for --size 600000
+      .then(() => page.screenshot({ path: resolve(shots, 'receiver-receiving.jpg'), quality: 80 }))
+      .catch(() => {})
+  }
   const samples: { recognition: number; ms: number }[] = []
   let ticks = 0
   const ticker = setInterval(async () => {
@@ -211,11 +235,12 @@ try {
       result.resumed = status
     }
     await page.locator('#download:enabled').waitFor({ timeout: Number(args.timeout) * 1000 })
+    if (shots) await page.screenshot({ path: resolve(shots, 'receiver-done.jpg'), quality: 80 })
   } finally {
     clearInterval(ticker)
   }
   const seconds = (Date.now() - startedAt) / 1000
-  const stats = JSON.parse((await page.getByTestId('debug').textContent()) ?? '{}')
+  const stats = JSON.parse((await page.getByTestId('debug').textContent()) || '{}')
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByTestId('download').click()])
   const savedPath = resolve(OUT, download.suggestedFilename())
   await download.saveAs(savedPath)

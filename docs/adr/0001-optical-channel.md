@@ -1,33 +1,33 @@
-# ADR 0001: 화면 채널 — 단방향 방송, `▀` 반블록 격자, 타일
+# ADR 0001: Screen channel — one-way broadcast, `▀` half-block grid, tiles
 
 - Status: Accepted
 - Date: 2026-11-01
 
 ## Context
 
-격리된 서버에서 닿는 길은 SSH 터미널의 글자 칸뿐이고, 받는 쪽은 폰 브라우저다. 빛은 한 방향으로만 가므로
-ACK도 재전송 요청도 없다. 수신자는 아무 때나 찍기 시작하고, 화면이 바뀌는 도중에 찍힌 사진에는 두 프레임이 섞인다.
+From an isolated server, the only way out is the character cells of an SSH terminal, and the receiver is a phone browser. Light travels in one direction only,
+so there is no ACK and no retransmission request. The receiver may start capturing at any time, and a photo taken while the screen is changing mixes two frames.
 
 ## Decision
 
-- 송신기는 **끝없이 방송**한다. 완료는 폰만 알므로 사람이 "수신 완료"를 보고 `q`를 누른다.
-- 화면은 `' '`, `'▀'`, 반전(SGR 7)만 쓰고 **색 코드는 쓰지 않는다**. 칸 하나 = 위·아래 모듈 2개, 아래 모듈은 칸 바탕색.
-  비UTF-8 tmux/screen에서는 공백 + 반전만 쓰는 `vt100`(칸 = 모듈 1개)으로 내린다.
-- QR 대신 **터미널 전체를 쓰는 격자 하나**: 큰 위치 표식 3개 + 작은 표식 1개, 타이밍 줄 4개,
-  형식 정보(W, H, 프로필)를 3번 반복 + CRC-8. 수신기는 프레임마다 크기를 읽으므로 전송 중 창 크기를 바꿔도 된다.
-- 전송 단위는 **1024모듈(128 B) 타일**이고 타일마다 따로 검증한다. 프레임은 `ESC[?2026h … l` 안에서 한 번에 쓴다.
-- 기본 **24fps**. 30fps 카메라와 같은 30은 매번 같은 위상(다시 그리는 중)에 찍힐 수 있다.
+- The sender **broadcasts endlessly**. Only the phone knows when the transfer is complete, so the person sees "received" and presses `q`.
+- The screen uses only `' '`, `'▀'`, and reverse video (SGR 7), and **no color codes**. One cell = 2 modules, upper and lower, and the lower module is the cell background.
+  On non-UTF-8 tmux/screen it falls back to `vt100` (cell = 1 module), which uses only space + reverse video.
+- Instead of a QR code, **one grid that uses the whole terminal**: 3 large finders + 1 small finder, 4 timing lines,
+  and format information (W, H, profile) repeated 3 times + CRC-8. The receiver reads the size from every frame, so the window can be resized during transfer.
+- The unit of transfer is a **1024-module (128 B) tile**, and each tile is verified separately. A frame is written in one go inside `ESC[?2026h … l`.
+- The default is **24 fps**. 30, the same as a 30 fps camera, can be captured at the same phase every time (while redrawing).
 
 ## Rationale
 
-- 터미널 그래픽(sixel, kitty): SSH 클라이언트마다 지원이 다르다. 색·점자·4분할 블록: 테마와 글꼴에 의존한다.
-  글자색/바탕색은 어떤 테마에서도 그 터미널의 최대 대비 쌍이다. 측정: 어두운·밝은 테마, 줄 간격 0/3 px에서 모듈 오류 0.
-- QR(v1): v10 한 장이 3,249모듈인데 200×55 격자는 21,094모듈이다. 찢어지면 장 전체를 잃는다.
-- 프레임 통째 검증: 그리기 시간 40 ms에서 15fps면 프레임의 26%만 깨끗했다. 8줄 타일은 100%였다.
+- Terminal graphics (sixel, kitty): support differs between SSH clients. Color, braille, and quadrant blocks: these depend on the theme and the font.
+  Foreground/background color is the maximum-contrast pair of that terminal in any theme. Measured: 0 module errors with dark and light themes and line spacing of 0/3 px.
+- QR (v1): one v10 symbol is 3,249 modules, while a 200×55 grid is 21,094 modules. If it tears, the whole symbol is lost.
+- Verifying whole frames: with a 40 ms draw time at 15 fps, only 26% of frames were clean. With 8-row tiles it was 100%.
 
 ## Consequences
 
-- 모듈당 1비트. 200×55에서 프레임당 1.73 KB, 24fps면 41.5 KB/s.
-- 찢어진 사진에서도 섞인 줄이 지나간 타일만 버린다(e2e: 찢어진 캡처 40%에서 인식률 99%).
-- QR 라이브러리를 쓸 수 없어 수신 비전을 직접 만든다([0003](0003-implementation.md)).
-- 저장한 다음에 `q`를 눌러야 한다. 송신이 멈추면 다시 받을 수 없다.
+- 1 bit per module. At 200×55 that is 1.73 KB per frame, or 41.5 KB/s at 24 fps.
+- Even from a torn photo, only the tiles the mixed rows passed through are discarded (e2e: 99% recognition with 40% of captures torn).
+- QR libraries cannot be used, so the receiver vision is built from scratch ([0003](0003-implementation.md)).
+- The user must press `q` after saving. If the transmission stops, the file cannot be received again.
