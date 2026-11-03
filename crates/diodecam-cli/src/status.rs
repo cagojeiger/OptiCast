@@ -20,7 +20,7 @@ pub struct Status<'a> {
     pub elapsed: Duration,
     pub source_progress: f64,
     pub repair_sent: u64,
-    pub source_symbols: u64,
+    pub symbols_needed: u64,
     pub target_fps: u32,
     /// Frames per second actually written, once measured.
     pub actual_fps: Option<f64>,
@@ -46,7 +46,7 @@ impl<'a> Status<'a> {
             elapsed: Duration::ZERO,
             source_progress: tx.source_progress(),
             repair_sent: tx.repair_sent(),
-            source_symbols: tx.source_symbols(),
+            symbols_needed: tx.symbols_needed(),
             target_fps: fps,
             actual_fps: None,
             paused: false,
@@ -111,7 +111,7 @@ fn line2(s: &Status, with_keys: bool, with_bar: bool) -> String {
     if let Some((_, _, tiles)) = s.grid {
         let rate = fps * data_tiles_per_frame(tiles) * CONTENT_BYTES as f64;
         parts.push(format!("{}/s", bytes_f(rate)));
-        let need = view_seconds(s.source_symbols, tiles, fps.max(0.1));
+        let need = view_seconds(s.symbols_needed, tiles, fps.max(0.1));
         parts.push(format!("phone needs {} of view", approx(need)));
     }
     if with_keys {
@@ -197,7 +197,7 @@ mod tests {
             elapsed: Duration::from_secs(41),
             source_progress: 1.0,
             repair_sent: 13_420,
-            source_symbols: 4292,
+            symbols_needed: 4294,
             target_fps: 24,
             actual_fps: None,
             paused: false,
