@@ -7,12 +7,12 @@ import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { describe, it } from 'node:test'
+import { afterEach, describe, it } from 'node:test'
 import { cameraView, framing, tear, toRgba } from '../tools/sim/camera.ts'
 import { randomBytes, senderFrames } from '../tools/sim/sender.ts'
 import { VTerm } from '../tools/sim/vterm.ts'
 import { MIN_MODULE_PX, captureWidth, eta, failure, formatBytes, formatSeconds, fps, hint, limitMib, moduleSize, quantile, recognition, safeName, scanWidth, symbolRate, tooLargeText, trim, type FrameSample, type Stage } from '../web/metrics.js'
-import { evictable, exportTiles, keepable, load, remove, save, shouldSave, type KeptFile, type SavedMeta } from '../web/store.js'
+import { append, evict, evictable, exportTiles, keepable, load, remove, type KeptFile, type SavedMeta } from '../web/store.js'
 import { diagnostics, view, type DiagnosticsSnapshot, type View, type ViewState } from '../web/view.js'
 import { OUT_OF_MEMORY, WasmReceiver, type ReceiverStats } from '../web/wasm.js'
 
@@ -429,9 +429,10 @@ describe('URL options', () => {
 })
 
 describe('resume store', () => {
-  const exp = (n: number) => {
+  /** An export of `n` tiles; `mark` fills the tile bytes, to tell chunks apart. */
+  const exp = (n: number, mark = 0) => {
     const b = new ArrayBuffer(8 + 108 * n)
-    new Uint8Array(b).set([79, 67, 83, 49])
+    new Uint8Array(b).fill(mark).set([79, 67, 83, 49])
     new DataView(b).setUint32(4, n)
     return b
   }
@@ -448,28 +449,34 @@ describe('resume store', () => {
   it('evicts entries older than 7 days and beyond 128 MiB, newest kept first', () => {
     const day = 24 * 3600 * 1000
     const now = 100 * day
-    const e = (id: string, ageDays: number, mib: number): SavedMeta => ({ id, name: id, size: 0, savedAt: now - ageDays * day, tiles: 1, bytes: mib * 2 ** 20 })
+    const e = (id: string, ageDays: number, mib: number): SavedMeta => ({ id, name: id, size: 0, savedAt: now - ageDays * day, tiles: 1, bytes: mib * 2 ** 20, chunks: 1 })
     assert.deepEqual(evictable([e('a', 1, 10), e('b', 8, 1), e('c', 2, 10)], now, null), ['b'])
     assert.deepEqual(evictable([e('new', 0, 100), e('mid', 1, 20), e('old', 2, 20)], now, null), ['old'])
     // The entry being saved is never evicted, but counts towards the budget.
     assert.deepEqual(evictable([e('keep', 9, 120), e('x', 0, 20)], now, 'keep'), ['x'])
+    // At startup the newest entry is never evicted for size: a transfer over the budget still resumes.
+    assert.deepEqual(evictable([e('big', 0, 150)], now, null), [])
+    assert.deepEqual(evictable([e('big', 0, 150), e('older', 1, 10)], now, null), ['older'])
+    // …but it still goes after 7 days.
+    assert.deepEqual(evictable([e('big', 8, 150)], now, null), ['big'])
   })
 
-  it('never replaces a saved entry with one of fewer tiles', () => {
-    const saved: SavedMeta = { id: 'a', name: 'a', size: 1, savedAt: 0, tiles: 50, bytes: 8 + 50 * 108 }
-    assert.equal(shouldSave(undefined, 1), true)
-    assert.equal(shouldSave(saved, 49), false)
-    assert.equal(shouldSave(saved, 50), true, 'the same count is saved again (fresh savedAt)')
-    assert.equal(shouldSave(saved, 51), true)
-  })
-
+  /** IDBKeyRange.bound for string keys, as store.js uses it. */
+  const keyRange = {
+    bound: (lower: string, upper: string, lowerOpen = false, upperOpen = false) => ({
+      includes: (k: unknown) => typeof k === 'string' && (lowerOpen ? k > lower : k >= lower) && (upperOpen ? k < upper : k <= upper),
+    }),
+  }
+  /** A key, or a key range: what getAll and delete take. */
+  const matches = (q: unknown, k: unknown) => (q && typeof q === 'object' && 'includes' in q ? (q as { includes: (k: unknown) => boolean }).includes(k) : q === k)
   /**
    * Just enough IndexedDB for store.js, in memory: every request succeeds in a task of its own,
    * in the order made, and a transaction completes once its last request has. `slowNextOpen`
-   * delays the next connection, so a transaction asked for later can be created first.
+   * delays the next connection, so a transaction asked for later can be created first. It is
+   * installed with IDBKeyRange; both go after each test. `old` is the layout of an older version.
    */
-  const fakeIndexedDB = () => {
-    const stores = new Map<string, { keyPath?: string; rows: Map<unknown, unknown> }>()
+  const fakeIndexedDB = (old: { version: number; stores: [name: string, keyPath?: string][] } = { version: 0, stores: [] }) => {
+    const stores = new Map<string, { keyPath?: string; rows: Map<unknown, unknown> }>(old.stores.map(([name, keyPath]) => [name, { keyPath, rows: new Map() }]))
     const db = {
       get objectStoreNames() {
         return Object.assign([...stores.keys()], { contains: (n: string) => stores.has(n) })
@@ -494,9 +501,16 @@ describe('resume store', () => {
           const s = stores.get(name)!
           return {
             get: (k: unknown) => request(() => s.rows.get(k)),
-            getAll: () => request(() => [...s.rows.values()]),
+            // In key order, as IndexedDB returns them.
+            getAll: (q?: unknown) =>
+              request(() =>
+                [...s.rows.entries()]
+                  .filter(([k]) => q === undefined || matches(q, k))
+                  .sort(([a], [b]) => (String(a) < String(b) ? -1 : 1))
+                  .map(([, v]) => v),
+              ),
             put: (v: Record<string, unknown>, k?: unknown) => request(() => void s.rows.set(s.keyPath ? v[s.keyPath] : k, v)),
-            delete: (k: unknown) => request(() => void s.rows.delete(k)),
+            delete: (q: unknown) => request(() => [...s.rows.keys()].filter((k) => matches(q, k)).forEach((k) => s.rows.delete(k))),
             clear: () => request(() => s.rows.clear()),
           }
         }
@@ -505,12 +519,15 @@ describe('resume store', () => {
     }
     let upgraded = false
     let delay = 0
-    return {
+    const idb = {
+      /** Rows of a store, to look behind store.js. */
+      rows: (name: string) => stores.get(name)!.rows,
+      names: () => [...stores.keys()].sort(),
       slowNextOpen: (ms: number) => (delay = ms),
       open: () => {
         const req: { result: typeof db; onsuccess: (() => void) | null; onupgradeneeded: ((e: { oldVersion: number }) => void) | null } = { result: db, onsuccess: null, onupgradeneeded: null }
         setTimeout(() => {
-          if (!upgraded) req.onupgradeneeded?.({ oldVersion: 0 })
+          if (!upgraded) req.onupgradeneeded?.({ oldVersion: old.version })
           upgraded = true
           req.onsuccess?.()
         }, delay)
@@ -518,45 +535,107 @@ describe('resume store', () => {
         return req
       },
     }
+    Object.assign(globalThis, { indexedDB: idb, IDBKeyRange: keyRange })
+    return idb
   }
-  const entry = (tiles: number) => ({ id: 'a', name: 'a.bin', size: 1, savedAt: Date.now(), data: exp(tiles) })
+  afterEach(() => {
+    Reflect.deleteProperty(globalThis, 'indexedDB')
+    Reflect.deleteProperty(globalThis, 'IDBKeyRange')
+  })
+  const entry = (id = 'a', savedAt = Date.now()) => ({ id, name: `${id}.bin`, size: 1, savedAt })
+  const marks = (chunks: ArrayBuffer[] | undefined) => chunks?.map((c) => new Uint8Array(c)[8])
 
-  it('decides a save against the entry read in its own transaction', async () => {
-    Object.assign(globalThis, { indexedDB: fakeIndexedDB() })
-    try {
-      assert.equal(await save(entry(5)), true)
-      const seen: (SavedMeta | undefined)[] = []
-      const only = (count: number) => (stored: SavedMeta | undefined) => (seen.push(stored), shouldSave(stored, count))
-      assert.equal(await save(entry(3), { only: only(3) }), false, 'never a smaller export over a saved entry')
-      assert.equal(seen[0]?.tiles, 5)
-      assert.equal((await load('a'))?.tiles, 5)
-      assert.equal(await save(entry(7), { only: only(7) }), true)
-      assert.equal((await load('a'))?.tiles, 7)
-    } finally {
-      Reflect.deleteProperty(globalThis, 'indexedDB')
-    }
+  it('the upgrade drops the progress saved as whole exports, once, and keeps the received file', async () => {
+    const idb = fakeIndexedDB({ version: 3, stores: [['meta', 'id'], ['tiles'], ['files', 'id']] })
+    idb.rows('meta').set('a', { id: 'a', name: 'a.bin', size: 1, savedAt: Date.now(), tiles: 1, bytes: 116 })
+    idb.rows('tiles').set('a', exp(1))
+    idb.rows('files').set('f', { id: 'f' })
+    assert.equal(await load('a'), undefined)
+    assert.deepEqual(idb.names(), ['chunks', 'files', 'meta'])
+    assert.equal(idb.rows('meta').size, 0)
+    assert.equal(idb.rows('files').size, 1)
+    await append(entry(), exp(1))
+    assert.equal((await load('a'))?.chunks, 1, 'and does not run again')
   })
 
-  it('a reset after a save started wins: the save does not bring the entry back', async () => {
+  it('appends chunks and loads them in order', async () => {
     const idb = fakeIndexedDB()
-    Object.assign(globalThis, { indexedDB: idb })
-    try {
+    const seen: (SavedMeta | undefined)[] = []
+    for (const [i, n] of [3, 1, 2].entries()) assert.equal(await append(entry(), exp(n, i + 1), { only: (stored) => (seen.push(stored), true) }), true)
+    assert.deepEqual(
+      seen.map((m) => m?.chunks),
+      [undefined, 1, 2],
+      'each append reads the record in its own transaction',
+    )
+    // Seq 10 sorts after seq 9: the keys are fixed-width.
+    for (let i = 4; i <= 14; i++) await append(entry('b'), exp(1, i))
+    const a = await load('a')
+    assert.deepEqual(marks(a?.data), [1, 2, 3])
+    assert.deepEqual([a?.tiles, a?.chunks, a?.bytes], [6, 3, 3 * 8 + 6 * 108])
+    assert.deepEqual(marks((await load('b'))?.data), [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14])
+    assert.equal(await append(entry(), exp(0)), false, 'an empty export is not written')
+    assert.equal(await append(entry(), new ArrayBuffer(9)), false, 'nor a malformed one')
+    assert.equal(idb.rows('chunks').size, 14)
+  })
+
+  it('remove deletes the record and every chunk, and only that transfer', async () => {
+    const idb = fakeIndexedDB()
+    for (let i = 0; i < 3; i++) await append(entry(), exp(1, i))
+    await append(entry('ab'), exp(1, 9)) // a key that starts like `a`'s
+    await remove('a')
+    assert.equal(await load('a'), undefined)
+    assert.deepEqual([...idb.rows('chunks').keys()], ['ab:00000000'])
+    // Appending again starts a new entry at seq 0.
+    await append(entry(), exp(2, 7))
+    assert.deepEqual(marks((await load('a'))?.data), [7])
+    // A record that does not match its chunks is corrupt: deleted when loaded.
+    idb.rows('meta').set('ab', { ...(idb.rows('meta').get('ab') as SavedMeta), tiles: 5 })
+    assert.equal(await load('ab'), undefined)
+    assert.equal(idb.rows('chunks').has('ab:00000000'), false)
+  })
+
+  it('evicts by age and by total bytes, never the entry appended to', async () => {
+    const idb = fakeIndexedDB()
+    const day = 24 * 3600 * 1000
+    await append(entry('stale', Date.now() - 8 * day), exp(1))
+    await append(entry('stale', Date.now() - 8 * day), exp(1))
+    assert.equal((await load('stale'))?.chunks, 2, 'the entry appended to is kept, however old')
+    await append(entry('fresh'), exp(1))
+    assert.equal(await load('stale'), undefined, 'older than 7 days')
+    // 2 × 65 MiB > 128 MiB: the older one goes, chunks and all, counted by the record's bytes.
+    const big = Math.ceil((65 * 2 ** 20) / 108)
+    await append(entry('x', Date.now() - 2000), exp(big))
+    await append(entry('x', Date.now() - 2000), exp(1))
+    await append(entry('y', Date.now() - 1000), exp(big))
+    assert.equal(await load('x'), undefined)
+    assert.equal((await load('y'))?.tiles, big)
+    assert.equal((await load('fresh'))?.tiles, 1)
+    assert.deepEqual([...idb.rows('chunks').keys()].sort(), ['fresh:00000000', 'y:00000000'])
+    await evict()
+    assert.equal(idb.rows('chunks').size, 2, 'nothing else to evict')
+  })
+
+  // main.js saveProgress: an export's tiles are appended only if no reset and no newer failed
+  // verification came since; either removes the entry, and the append must not write it back.
+  for (const event of ['reset', 'failed verification']) {
+    it(`a ${event} after an append started wins: the append does not bring the entry back`, async () => {
+      const idb = fakeIndexedDB()
       let gen = 0
-      await save(entry(5))
-      // main.js saveProgress, then reset() before the save's transaction exists; the reset's
-      // remove even runs first. The check runs inside the save's transaction and sees the bump.
-      const started = gen
+      let failedSeen = 0
+      await append(entry(), exp(5))
+      const started = { gen, failed: failedSeen }
+      // The remove even runs first: the append's connection is slow, its transaction comes second.
       idb.slowNextOpen(20)
-      const saving = save(entry(9), { only: (stored) => started === gen && shouldSave(stored, 9) })
-      gen++ // reset()
+      const saving = append(entry(), exp(9), { only: () => started.gen === gen && started.failed === failedSeen })
+      if (event === 'reset') gen++
+      else failedSeen++
       const removing = remove('a')
       assert.equal(await saving, false)
       await removing
       assert.equal(await load('a'), undefined)
-    } finally {
-      Reflect.deleteProperty(globalThis, 'indexedDB')
-    }
-  })
+      assert.equal(idb.rows('chunks').size, 0)
+    })
+  }
 
   it('offers the received file for 24 hours at most (the privacy.html promise)', () => {
     const day = 24 * 3600 * 1000

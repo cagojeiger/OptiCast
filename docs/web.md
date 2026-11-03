@@ -36,7 +36,7 @@ The frame border is green when ≥ 70 % of tiles pass, orange when some do, red 
 ## 4. Storage
 
 - The received file stays in this browser (IndexedDB) until it is shared, the next file arrives, or Reset — at most 24 h. A reload offers it again. It is never opened; it is saved only by Share or Download.
-- Collected tiles are saved every 5 s and when the tab is hidden, so a reload resumes the same transfer. Entries older than 7 days or beyond 128 MiB in total are dropped.
+- Every 5 s and when the tab is hidden, the tiles collected since the last save are appended to the transfer's saved progress (nothing already saved is copied again), so a reload resumes the same transfer, however large the file. A failed SHA-256 check or Reset deletes it. Entries older than 7 days or beyond 128 MiB in total are dropped, never the one being saved.
 - Browser storage belongs to the page's origin. On `*.github.io` that origin is shared with the account's other Pages sites.
 
 ## 5. Offline

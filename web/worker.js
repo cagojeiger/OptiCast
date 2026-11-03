@@ -15,14 +15,14 @@ import { OUT_OF_MEMORY, WasmReceiver } from './wasm.js?v=__V__'
  *   | { type: 'reset' }
  *   | { type: 'debug', on: boolean }
  *   | { type: 'limit', mib: number }
- *   | { type: 'export' }
- *   | { type: 'import', bytes: ArrayBuffer, generation: number }} ToWorker
+ *   | { type: 'export', generation: number }
+ *   | { type: 'import', chunks: ArrayBuffer[], generation: number }} ToWorker
  */
 
 /**
  * Worker → page.
  * @typedef {{ type: 'result', capturedAt: number, ms: number, stats: ReceiverStats, file: ArrayBuffer | null }
- *   | { type: 'exported', bytes: ArrayBuffer, tiles: number, transferId: string | null }
+ *   | { type: 'exported', bytes: ArrayBuffer, tiles: number, transferId: string | null, generation: number }
  *   | { type: 'imported', tiles: number, generation: number, stats: ReceiverStats }
  *   | { type: 'error', message: string, fatal: boolean }} FromWorker
  */
@@ -78,11 +78,20 @@ function handle(msg) {
         const state = rx.exportState()
         const tiles = state.length >= 8 ? new DataView(state.buffer).getUint32(4) : 0
         const bytes = /** @type {ArrayBuffer} */ (state.buffer)
-        post({ type: 'exported', bytes, tiles, transferId: rx.stats().meta?.id ?? null }, [bytes])
+        post({ type: 'exported', bytes, tiles, transferId: rx.stats().meta?.id ?? null, generation: msg.generation }, [bytes])
         return
       }
       case 'import': {
-        const tiles = rx.importState(new Uint8Array(msg.bytes))
+        // The saved chunks one by one: no buffer of the whole progress.
+        let tiles = 0
+        for (const chunk of msg.chunks) {
+          const n = rx.importState(new Uint8Array(chunk))
+          if (n < 0) {
+            tiles = -1
+            break
+          }
+          tiles += n
+        }
         post({ type: 'imported', tiles, generation: msg.generation, stats: rx.stats() })
         return
       }

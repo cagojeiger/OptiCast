@@ -28,7 +28,7 @@
  * @property {number} failed
  * @property {boolean} done
  * @property {string | null} error
- * @property {number} kept
+ * @property {number} kept Tiles kept since the last export.
  * @property {string} tile_status One character per tile position of this frame: '1' passed, '0' failed.
  * @property {(number | null)[]} [tile_centers] With debug on: tile centres in scan pixels.
  */
@@ -99,7 +99,7 @@ export class WasmReceiver {
     return ptr ? this.view(ptr).slice() : null
   }
 
-  /** Collected tiles, to resume after a reload. */
+  /** The tiles collected since the last export (then forgotten in the module), to append to the saved progress. */
   exportState() {
     return this.view(this.ex.receiver_export(this.handle)).slice()
   }
