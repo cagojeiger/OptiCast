@@ -47,6 +47,10 @@ jobs:
       # The receiver test replays frames from the built sender through the built wasm.
       - run: pnpm wasm
       - run: pnpm test
+      # The setup-page picture is generated from the real sender's (deterministic) frames:
+      # a status-line change not followed by regenerating it fails here.
+      - name: Setup-page terminal picture is current
+        run: node tools/terminal-example.ts && git diff --exit-code web/example-terminal.svg
 
       # Every run assembles the site, so a pull request that breaks it fails before main.
       - name: Assemble the site
@@ -76,3 +80,35 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v5
+
+  # The browser end to end test: real sender, simulated camera, Chrome's fake camera, the
+  # receiver page, byte compare (tools/e2e.ts). The only automated cover of web/main.js,
+  # worker.js, the IndexedDB resume and the download. It runs after `test` and shows red on
+  # a pull request, but `deploy` deliberately does NOT depend on it: it is new and unproven
+  # on 2 vCPUs, so a flaky run must not block a deploy. Add it to deploy's `needs` once stable.
+  e2e:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # tools/e2e.ts builds the sender and the wasm itself and launches the runner's
+      # preinstalled Google Chrome (playwright channel 'chrome').
+      - run: node tools/e2e.ts
+      - name: Resume from IndexedDB after a reload mid-transfer
+        run: node tools/e2e.ts --size 600000 --reload-after 7
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e
+          path: dist/e2e/
+          if-no-files-found: ignore

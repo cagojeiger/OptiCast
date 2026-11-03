@@ -37,6 +37,6 @@ Generated files: `node tools/icons.ts` (icons), `node tools/qr.ts` (setup-page Q
 
 ## Release
 
-- **CI** (`.github/workflows/ci.yml`, every PR and `main`): types, fmt, clippy, tests, wasm, JS tests, and the site assembled with the commit and version filled in. `main` deploys it to GitHub Pages.
+- **CI** (`.github/workflows/ci.yml`, every PR and `main`): types, fmt, clippy, tests, wasm, JS tests, and the site assembled with the commit and version filled in, plus a check that the setup-page terminal picture is current and a separate `e2e` job (real Chrome against the real sender; not yet required for the deploy). `main` deploys the site to GitHub Pages.
 - **Release** (`release.yml`, tag `vX.Y.Z`): builds the sender for Linux (musl) and macOS beside the tests and, once both pass, attaches `diodecam-<target>.tar.gz` + `.sha256` (binary, LICENSE, THIRD_PARTY_LICENSES.md, README). The names carry no version, so `releases/latest/download/…` stays fixed.
 - The version lives only in `Cargo.toml`. PRs are squash-merged as `type(scope): summary (#N)`.
