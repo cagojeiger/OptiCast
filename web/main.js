@@ -825,7 +825,7 @@ async function saveProgress(id, tiles, count) {
     // and the write: nothing after a reset, and never a smaller export over a saved entry (one made
     // while saved tiles were being re-imported).
     const entry = { id, name: meta.name, size: meta.size, savedAt: Date.now(), data: tiles }
-    if (!(await store.save(entry, { only: (stored) => gen === resetGen && store.shouldSave(stored, count) }))) return
+    if (!(await store.save(entry, { only: (stored) => gen === resetGen && !last?.done && last?.meta?.id === id && store.shouldSave(stored, count) }))) return
     // The new progress replaced the entry that could not be restored.
     if (notice === RESTORE_FAILED) {
       notice = null

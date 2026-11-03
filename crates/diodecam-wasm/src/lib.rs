@@ -766,7 +766,7 @@ mod tests {
             rx.accept_up_to(Tile::data(0x1234, 0, esi, [0; 96]), 10);
         }
         assert_eq!(rx.kept.len(), 10);
-        assert!(rx.kept_ids.len() <= 10, "kept_ids grew to {}", rx.kept_ids.len());
+        assert_eq!(rx.kept_ids.len(), 10, "kept_ids must stop at the cap");
         assert_eq!(rx.kept.last().map(|t| t.esi), Some(9), "the first ones are kept");
     }
 

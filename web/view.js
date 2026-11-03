@@ -233,7 +233,7 @@ export function diagnostics(d) {
     grid: s?.grid ? { w: s.grid.w, h: s.grid.h, profile: s.grid.profile } : null,
     // Progress only: the transfer ID and exact size together could identify the file.
     transfer: s?.meta
-      ? { progress: Math.round((s.symbols.have / (s.symbols.need || 1)) * 100) / 100, foreign: s.foreign, invalid: s.invalid, failed: s.failed, done: s.done }
+      ? { progress: s.done ? 1 : Math.round((s.symbols.have / (s.symbols.need || 1)) * 100) / 100, foreign: s.foreign, invalid: s.invalid, failed: s.failed, done: s.done }
       : null,
   }
 }
