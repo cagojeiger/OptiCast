@@ -125,7 +125,10 @@ the receiver (used by the e2e in desktop Chrome).
 | Done | ✓ disc | ✓ green | Start (secondary) | enabled | enabled (primary) | enabled |
 | Error | guides | ✕ red | Start (secondary); Reload when the decoder is gone | by kept file | by kept file | enabled |
 
-Reset asks once when an unsaved file exists. When the decoder is gone only a reload helps (it resumes
+The progress ring and bar stop at 99 % until the file is verified, and past the symbol estimate the
+strip says "A few more pieces to go" instead of a count. Download starts a browser download and Share
+· Save opens the share sheet; Reset asks once when the file is not yet saved (Share · Save counts as
+saved, Download does not: "Discard the received file? Check the download finished first."). When the decoder is gone only a reload helps (it resumes
 from the saved progress), so Start becomes Reload in the same place, primary unless a kept file is on
 offer: the home-screen app has no reload control.
 
@@ -133,7 +136,9 @@ offer: the home-screen app has no reload control.
 
 English, short, concrete. Sentence case. Name the next action, not the mechanism: "Share · Save
 turns on when the file is complete", "Hold the phone sideways for a larger grid", "Save it, then
-press q in the terminal". Never "please", never exclamation marks.
+press q in the terminal". Other lines: "The camera is paused by the system." (warning strip),
+"A few more pieces to go", "Download started. Check it, then press q in the terminal", and the
+**Reload** button when the decoder is gone. Never "please", never exclamation marks.
 
 ## Implementation constraints
 
