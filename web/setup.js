@@ -1,5 +1,5 @@
 // @ts-check
-// The desktop setup page (DESIGN.md): the target picker and the file field rewrite
+// The desktop setup page: the target picker and the file field rewrite
 // the commands, and the copy buttons copy one. Nothing else.
 
 {

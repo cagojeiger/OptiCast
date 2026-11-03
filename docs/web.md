@@ -1,59 +1,45 @@
 # Receiver (web)
 
-A phone browser (iPhone Safari first) films the terminal and rebuilds the file. Everything runs on the device; nothing is uploaded. The same address shows a setup page on a desktop. UI rules and the state table: [DESIGN.md](../DESIGN.md).
+A phone browser (iPhone Safari first) rebuilds the file on the device; nothing is uploaded or opened.
 
 ## 1. Address
 
-| | |
+Desktop browsers with a mouse show setup; phones and the home-screen app show the receiver.
+
+| Query | Effect |
 |---|---|
-| Desktop with a mouse (`(hover: hover) and (pointer: fine)`) | Setup page: download, send command, QR |
-| Phone, or the home-screen app | Receiver |
-| `?receiver=1` | Receiver on a desktop too |
-| `?max=256` | Largest file in MiB (default 64, 1–512) |
-| `?cap=3840` and `?scan=3840` | Ask the camera for 4K and decode it at full width: twice the pixels per module, about four times the work |
-| `?debug=1` | Draw finders and tile centres; show the decoder's JSON stats |
+| `?receiver=1` | Force the receiver on desktop |
+| `?max=256` | File limit in MiB (default 64, range 1–512); larger files need more phone memory |
+| `?cap=3840&scan=3840` | Request 4K capture and decoding instead of the default 1920-wide image; about four times the work if the camera supports it |
+| `?debug=1` | Draw finders and tile centres; show decoder JSON |
 
 ## 2. States
 
-`○ Idle` / `○ Looking` / `○ Paused` → `● Receiving` → `✓ Received · SHA-256 verified`, or `✕ Error`. The strip changes colour in one place; the buttons never move and are only enabled or disabled. A file counts as received only after RaptorQ decode, size check and SHA-256 match; until then progress stops at 99 %. The ✓ strip then shows the time from the first tile read and the speed (size over that time); after a pause (camera stopped, paused by the system or the page hidden) or once saved progress was resumed, it shows when the file arrived; under a second, only the time. Errors say what to do in one sentence (camera denied, camera taken by another app, file too large, decoder error → **Reload** in place of Start).
-
-One line of text sits over the camera; the most urgent wins: a camera, share or restore failure, then opening the camera, file too large, received, paused, looking, receiving. Download only starts a download, so Reset still asks before discarding the file; Share counts as saved once it succeeds.
+Files become available after decoding, size checking and SHA-256 verification. Download only starts a browser download, so Reset still asks before discarding the file; a successful Share counts as saved.
+A fatal decoder error requires Reload to recover saved progress. Exact states, timing and button behavior live in [web/view.js](../web/view.js).
 
 ## 3. Hints
 
-The frame border is green when ≥ 70 % of tiles pass, orange when some do, red when none. One advice line, from the last 2 s:
-
-| Condition | Advice |
-|---|---|
-| Grid in under half the frames, stopped at finders | Frame the whole screen, all four corner marks |
-| 〃, at timing lines or format | The grid is blurred: hold still, at a distance that focuses (with modules < 4.5 px: the sideways or closer advice below) |
-| 〃, at geometry | The grid looks bent: face the screen, a little further back |
-| Tiles read ≥ 90 % | You can raise the sender fps (+) |
-| Tiles read < 70 %, modules < 4.5 px, portrait | Hold the phone sideways for a larger grid |
-| Tiles read < 70 %, modules < 4.5 px | The grid cells are small: move closer or enlarge the terminal font |
-| Tiles read < 70 % | Lower the sender fps (-) |
+Follow the on-screen advice to adjust framing, distance or sender fps. Recognition conditions and wording live in [web/metrics.js](../web/metrics.js).
 
 ## 4. Storage
 
-- The received file stays in this browser (IndexedDB) until it is shared, the next file arrives, or Reset — at most 24 h. A reload offers it again. It is never opened; it is saved only by Share or Download.
-- Every 5 s and when the tab is hidden, the tiles collected since the last save are appended to the transfer's saved progress (nothing already saved is copied again), so a reload resumes the same transfer, however large the file. A failed SHA-256 check or Reset deletes it. Entries older than 7 days or beyond 128 MiB in total are dropped, never the one being saved.
-- Browser storage belongs to the page's origin. On `*.github.io` that origin is shared with the account's other Pages sites.
+- IndexedDB keeps one verified file until Share, replacement or Reset. A reload offers it again; files older than 24 h are deleted on lookup.
+- Every 5 s and when the tab is hidden, new tiles are appended to saved progress. After reload, point at the same transfer to resume. Reset or failed verification deletes that transfer's progress.
+- Progress expires after 7 days. Size eviction removes older entries beyond a 128 MiB total budget, protecting the current or latest transfer even if it exceeds that budget.
+- Storage is best effort: browser quota, eviction or write failure can prevent recovery. The chunk-storage upgrade drops progress saved by older versions once, while keeping the verified file.
+- Storage belongs to the page's origin; `*.github.io` shares it with the account's other Pages sites. Implementation: [web/store.js](../web/store.js).
 
 ## 5. Offline
 
-Add to Home Screen opens it like an app. A service worker caches each deploy under its commit and works offline; a new deploy replaces the cache on the next online visit. The home-screen app has its own storage, separate from Safari.
+After an online visit has cached the receiver, Add to Home Screen can open it offline. Each deploy has its own service-worker cache, replaced on an online update. The home-screen app has storage separate from Safari. Cache behavior: [web/sw.js](../web/sw.js).
 
 ## 6. Diagnostics
 
-The ⓘ sheet shows capture and processing fps, decode time, tiles read, module size, the stage most frames stop at, and a camera picker (choose a single lens such as "Back Camera" on an iPhone Pro to stop the automatic lens switch). **Copy diagnostics** copies device, camera and recognition numbers as JSON — never the file's name, size or content, the transfer ID, or device IDs.
+The ⓘ sheet shows camera/processing rates, decode time, tile recognition, module size and the failing stage. On an iPhone Pro, choose a single lens such as “Back Camera” to avoid automatic lens switching.
+Copy diagnostics includes device, camera and recognition numbers, excluding file name, size, content, transfer ID and device IDs. Fields are selected in [web/view.js](../web/view.js); phone speed measurement is in [development.md](development.md#speed-on-a-phone).
 
 ## 7. Vision (`crates/diodecam-vision`)
 
-1. **Binarize** with a local mean (integral image); both polarities.
-2. **Finders**: 1:1:3:1:1 runs, cross-checked; three passes with different windows, their candidates merged so near and far finders of a tilted view are found together.
-3. **Timing lines** give W, H and the module pitch: by counting edges when sharp, by the phase of the 1-0-1-0 pattern when blurred. **Format information** (CRC-8, three copies) confirms the size.
-4. **Geometry**: a homography from the four finders, checked against all four timing lines; lens distortion corrected from the residuals.
-5. **Sampling**: each module's centre against its neighbourhood mean.
-6. **Tracking**: the next frame looks near the last finders. A lost grid of large modules is searched at half scale first; an empty view is searched every other frame.
-
-Floor (`node tools/floor.ts`, simulated 1080p camera): every tile reads from 2.9 px per module when sharp, 3.4 px with 2 px of blur, 4.9 px with 3 px. Real phones refocus, so the hints use 4.5 px. Known limits: strong lens distortion (k₁ > 0.018) and the iPhone's automatic lens switch.
+The [vision crate](../crates/diodecam-vision/src/lib.rs) detects and tracks the grid and samples its modules; algorithm details belong with that code.
+Small modules, blur, strong lens distortion and iPhone automatic lens switching can prevent recognition. [tools/floor.ts](../tools/floor.ts) measures module-size limits with a simulated camera; its results do not establish real-phone performance.

@@ -1,4 +1,4 @@
-//! The two status lines (`docs/cli.md`) and their number formats.
+//! The two status lines and their number formats.
 
 use std::time::Duration;
 

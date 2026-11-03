@@ -12,59 +12,31 @@ Move a file from a terminal to a phone through the camera. One way, offline: no 
 
 Open **https://cagojeiger.github.io/diodecam/** on a computer. It shows the download command for your server and a QR code for the phone.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/setup-dark.png">
-  <img src="docs/images/setup-light.png" alt="The setup page: download, send, open the receiver, receive">
-</picture>
-
 1. **Download** the sender on the server:
    ```sh
    curl -fsSL https://github.com/cagojeiger/diodecam/releases/latest/download/diodecam-x86_64-unknown-linux-musl.tar.gz | tar xz
    ```
    Other builds: `aarch64-unknown-linux-musl`, `aarch64-apple-darwin`, `x86_64-apple-darwin`.
-2. **Send**: `./diodecam-x86_64-unknown-linux-musl/diodecam send <FILE>`. The terminal keeps broadcasting until you press `q`.
+2. **Send** one regular file: `./diodecam-x86_64-unknown-linux-musl/diodecam send <FILE>`. The terminal keeps broadcasting until you press `q`.
 3. **Receive**: scan the QR with the phone, tap **Start** and frame the whole terminal. Holding the phone sideways reads better.
-4. When it says **✓ Received**, tap **Share · Save**, then press `q` on the server.
+4. When it says **✓ Received**, use **Share · Save** or **Download**. Check the file is saved, then press `q` on the server.
 
 Keys while sending: `+`/`-` frame rate, space pause, `q` quit. `diodecam --help` lists the options. Pack a folder with `tar czf` first.
 
-## Speed
-
-24 fps, incompressible data, every tile read (the best case). The grid fills the terminal, so a bigger terminal is faster.
-
-| Terminal | Per second | 1 MiB |
-|---|---|---|
-| 80×24 | 4.1 KB/s | ~4 min |
-| 120×40 | 15 KB/s | ~71 s |
-| 200×55 | 41.5 KB/s | ~26 s |
-
-When a file arrives, the phone shows how long it took and the speed it got ([measuring](docs/development.md#speed-on-a-phone)).
-
-## How it works
-
-```
-send:    file → RaptorQ symbols → 128-byte tiles (Reed–Solomon + CRC-32C) → grid of ▀ cells → terminal
-receive: camera → find the grid → check each tile → about K + 2 symbols → rebuild → SHA-256 → save
-```
-
-The sender repeats fresh repair symbols forever, so a missed frame only costs time: the phone needs about K + 2 symbols (K is the file's symbol count), not particular ones. A damaged tile fails its checks and is dropped, and the rebuilt file must match its SHA-256 before it can be saved.
+The sender's KB/s assumes every tile is read; the phone shows measured time and speed after an uninterrupted transfer ([measuring](docs/development.md#speed-on-a-phone)).
 
 ## Safety
 
 - Moving data out of a restricted network needs your organisation's approval. A camera is an export channel like any other.
 - The screen is not encrypted: anyone who can see or film it can receive the file. SHA-256 proves the file arrived intact, not who sent it.
-- The receiver uploads nothing and never opens the file; it saves only when you tap Share or Download.
+- The receiver uploads nothing and never opens the file. It keeps a local copy for recovery; Share or Download exports it ([storage and expiry](docs/web.md#4-storage)).
 - The page is served from `*.github.io`, whose browser storage is shared with other Pages sites of the same account. For sensitive use, host `web/` on your own HTTPS domain.
 
 ## Docs
 
-| | |
-|---|---|
-| [docs/protocol.md](docs/protocol.md) | The screen format both sides follow |
-| [docs/cli.md](docs/cli.md) | The sender |
-| [docs/web.md](docs/web.md) | The receiver |
-| [docs/development.md](docs/development.md) | Build, test, release |
-| [DESIGN.md](DESIGN.md) · [docs/adr/](docs/adr/README.md) | UI rules · why it is built this way |
+- [Receiver](docs/web.md): options, storage and diagnostics.
+- [Development](docs/development.md): architecture, build, test and release.
+- [Protocol](docs/protocol.md): the exact screen format.
 
 ## License
 

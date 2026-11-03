@@ -1,4 +1,4 @@
-/* Tokens (DESIGN.md). Neutral gray in two modes plus one signal hue; the camera
+/* Tokens. Neutral gray in two modes plus one signal hue; the camera
    box and everything drawn over the video always use the dark set. */
 :root {
   color-scheme: light dark;
@@ -91,7 +91,7 @@ body {
   color: var(--text);
 }
 
-/* One screen, five fixed rows (DESIGN.md): toolbar · camera (the rest) · progress ·
+/* One screen, five fixed rows: toolbar · camera (the rest) · progress ·
    actions. Nothing scrolls on a phone; the camera takes whatever height is left. */
 main {
   height: 100dvh;

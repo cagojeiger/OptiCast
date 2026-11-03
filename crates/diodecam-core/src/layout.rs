@@ -17,7 +17,7 @@ pub const MIN_HEIGHT: usize = 20;
 pub const MIN_TILES: usize = 2;
 /// Largest width or height the 9-bit FI fields can carry.
 pub const MAX_SIDE: usize = 511;
-/// Terminal rows reserved for the status bar (`docs/cli.md`).
+/// Terminal rows reserved for the status bar.
 pub const STATUS_ROWS: usize = 2;
 
 /// How modules map to terminal cells (spec §1).
