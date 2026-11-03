@@ -11,7 +11,8 @@
 //! - `receiver_stats(handle) -> ptr`: UTF-8 JSON; its length is `last_len()`.
 //! - `receiver_file(handle) -> ptr`: the verified file (null until done); length `last_len()`.
 //! - `receiver_export(handle) -> ptr` / `receiver_import(handle, ptr, len) -> i32`:
-//!   collected tiles, to resume a transfer after a reload (IndexedDB).
+//!   the tiles collected since the previous export (then forgotten here), for the
+//!   host to append to its saved progress (IndexedDB); a reload imports them all back.
 //! - `receiver_set_debug(handle, on)`: adds per-tile positions to the stats.
 //! - `receiver_set_limit(handle, mib)`: largest file accepted (default 64 MiB,
 //!   clamped to 1–1024 MiB); a bigger transfer's META is refused before anything
@@ -35,8 +36,10 @@ use diodecam_core::tile::{self, Tile, TileKind, DATA_BYTES};
 use diodecam_core::{frame, Accepted, Assembler, Layout};
 use diodecam_vision::{luma_rgba, Detection, Point, Polarity, Stage, Vision};
 
-/// Tiles kept for export at most (~32 MB); beyond that resume is not offered.
-const MAX_KEPT: usize = 300_000;
+/// Tiles kept between two exports at most, META aside (~7 MB; the page exports every 5 s),
+/// and ids of tiles kept before META (the core holds as many). Past it nothing more is kept
+/// until the next export: those tiles are received but not saved for a resume.
+const MAX_KEPT: usize = 1 << 16;
 /// Bounds for `receiver_set_limit`, in MiB.
 pub const LIMIT_MIB: std::ops::RangeInclusive<u32> = 1..=1024;
 const EXPORT_MAGIC: &[u8; 4] = b"OCS1";
@@ -51,9 +54,14 @@ pub struct Receiver {
     file: Option<Vec<u8>>,
     error: Option<String>,
     debug: bool,
-    /// META (once) plus every DATA tile given to the assembler, for export.
+    /// New tiles since the last export: META (once) and every new DATA symbol.
     kept: Vec<Tile>,
+    /// Tiles kept (or imported) while no META is confirmed: the assembler answers each
+    /// such tile `Pending`, new or not. Once META is confirmed its own de-duplication
+    /// says which symbols are new.
     kept_ids: HashSet<(u16, u8, u32)>,
+    /// The confirmed META's tile, and whether it was kept (or imported) already.
+    meta_tile: Option<Tile>,
     kept_meta: bool,
     frame: FrameStats,
     totals: Totals,
@@ -98,6 +106,7 @@ impl Receiver {
             debug: false,
             kept: Vec::new(),
             kept_ids: HashSet::new(),
+            meta_tile: None,
             kept_meta: false,
             frame: FrameStats::default(),
             totals: Totals::default(),
@@ -155,29 +164,35 @@ impl Receiver {
     }
 
     fn accept(&mut self, t: Tile) {
-        self.accept_up_to(t, MAX_KEPT);
+        self.accept_with(t, true, MAX_KEPT);
     }
 
-    /// [`Receiver::accept`] with the export cap as a parameter (tests use a small one).
-    /// Past the cap neither `kept` nor its dedup set grows: DATA can keep arriving as
-    /// `Pending` (no META yet) with no bound but the screen's.
-    fn accept_up_to(&mut self, t: Tile, max_kept: usize) {
+    /// Gives a tile to the assembler. With `save`, a new one is kept for the next export;
+    /// an imported tile is not (it is saved already), but counts as seen. `max_kept` is
+    /// the cap (tests use a small one): past it neither `kept` nor `kept_ids` grows, as
+    /// DATA can keep arriving as `Pending` (no META yet) with no bound but the screen's.
+    fn accept_with(&mut self, t: Tile, save: bool, max_kept: usize) {
         if self.file.is_some() {
             return;
         }
         let result = self.assembler.accept(&t);
-        let room = self.kept.len() < max_kept;
-        let keep = room
-            && match t.kind {
-                // Also when the replay of held DATA completes the decode right away.
-                TileKind::Meta => matches!(result, Accepted::MetaConfirmed | Accepted::Complete) && !self.kept_meta,
-                TileKind::Data => {
-                    matches!(result, Accepted::Symbol | Accepted::Complete | Accepted::Pending)
-                        && self.kept_ids.insert((t.tag, t.sbn, t.esi))
-                }
-            };
-        if keep {
-            self.kept_meta |= t.kind == TileKind::Meta;
+        let room = !save || self.kept.len() < max_kept;
+        let new = match (t.kind, result) {
+            // Also when the replay of held DATA completes the decode right away.
+            (TileKind::Meta, Accepted::MetaConfirmed | Accepted::Complete) => {
+                // From here on the assembler tells new symbols apart.
+                self.kept_ids = HashSet::new();
+                self.meta_tile = Some(t.clone());
+                !std::mem::replace(&mut self.kept_meta, true)
+            }
+            // Symbol and Complete only ever answer a symbol the decoder had not seen.
+            (TileKind::Data, Accepted::Symbol | Accepted::Complete) => room,
+            (TileKind::Data, Accepted::Pending) => {
+                room && self.kept_ids.len() < max_kept && self.kept_ids.insert((t.tag, t.sbn, t.esi))
+            }
+            _ => false,
+        };
+        if new && save {
             self.kept.push(t);
         }
     }
@@ -194,17 +209,22 @@ impl Receiver {
                 self.error = None;
                 self.kept = Vec::new();
                 self.kept_ids = HashSet::new();
+                self.meta_tile = None;
                 self.kept_meta = false;
             }
             Err(e) => {
                 self.error = Some(e.to_string());
                 if e.restarts() {
-                    // The symbols went with the decode. META stays if it is still confirmed
-                    // (an empty file's self-contradictory META is dropped for good).
-                    let meta = self.assembler.meta().is_some();
-                    self.kept.retain(|t| meta && t.kind == TileKind::Meta);
-                    self.kept_meta = !self.kept.is_empty();
+                    // The symbols went with the decode, and the host drops what it saved
+                    // (main.js), so META is kept again if it is still confirmed (an empty
+                    // file's self-contradictory META is dropped for good).
+                    self.kept.clear();
                     self.kept_ids.clear();
+                    if self.assembler.meta().is_none() {
+                        self.meta_tile = None;
+                    }
+                    self.kept.extend(self.meta_tile.clone());
+                    self.kept_meta = self.meta_tile.is_some();
                 }
                 // Out of memory or over the limit: the payload is kept; try again later.
             }
@@ -227,21 +247,18 @@ impl Receiver {
         self.file.as_deref()
     }
 
-    /// Collected tiles: "OCS1", u32 count (BE), then 108 bytes per tile.
-    pub fn export(&self) -> Vec<u8> {
-        let tag = self.assembler.transfer_id().map(|id| id as u16);
-        let tiles: Vec<&Tile> = self.kept.iter().filter(|t| tag.is_none_or(|g| t.tag == g)).collect();
-        let mut out = Vec::with_capacity(8 + tiles.len() * DATA_BYTES);
-        out.extend_from_slice(EXPORT_MAGIC);
-        out.extend_from_slice(&(tiles.len() as u32).to_be_bytes());
-        for t in tiles {
-            out.extend_from_slice(&t.to_bytes());
-        }
-        out
+    /// The tiles of the confirmed transfer kept since the last export, which are then
+    /// forgotten here: "OCS1", u32 count (BE), then 108 bytes per tile. Before META
+    /// nothing is exported (nor forgotten): the tiles have no transfer to be saved under.
+    pub fn export(&mut self) -> Vec<u8> {
+        let Some(tag) = self.assembler.transfer_id().map(|id| id as u16) else { return export_of(&[]) };
+        let mut tiles = std::mem::take(&mut self.kept);
+        tiles.retain(|t| t.tag == tag);
+        export_of(&tiles)
     }
 
-    /// Feeds exported tiles back in (each is CRC-checked again). Returns how
-    /// many were read, or −1 if the data is not an export.
+    /// Feeds exported tiles back in (each is CRC-checked again); they are not exported
+    /// again. Returns how many were read, or −1 if the data is not an export.
     pub fn import(&mut self, bytes: &[u8]) -> i32 {
         if bytes.len() < 8 || &bytes[..4] != EXPORT_MAGIC {
             return -1;
@@ -254,7 +271,7 @@ impl Receiver {
         let mut read = 0;
         for chunk in body.chunks_exact(DATA_BYTES) {
             let Ok(t) = Tile::from_bytes(chunk.try_into().expect("108-byte chunk")) else { continue };
-            self.accept(t);
+            self.accept_with(t, false, MAX_KEPT);
             read += 1;
         }
         self.finish();
@@ -350,6 +367,17 @@ impl Receiver {
         j.push('}');
         j
     }
+}
+
+/// "OCS1", u32 count (BE), then 108 bytes per tile.
+fn export_of(tiles: &[Tile]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(8 + tiles.len() * DATA_BYTES);
+    out.extend_from_slice(EXPORT_MAGIC);
+    out.extend_from_slice(&(tiles.len() as u32).to_be_bytes());
+    for t in tiles {
+        out.extend_from_slice(&t.to_bytes());
+    }
+    out
 }
 
 /// Mean module coordinate of each tile's 1024 modules.
@@ -618,24 +646,33 @@ mod tests {
         assert_eq!(field(&rx.stats_json(), "stage"), "\"finders\"");
     }
 
+    /// Tiles in an export.
+    fn count(export: &[u8]) -> usize {
+        u32::from_be_bytes(export[4..8].try_into().unwrap()) as usize
+    }
+
     #[test]
     fn export_import_resumes_a_transfer() {
         let data: Vec<u8> = (0..20_000u32).map(|i| (i * 31 % 251) as u8).collect();
         let mut tx = Transfer::prepare(&data, "a/b.bin", SendOptions { compress: false }, 0).unwrap();
         let mut rx = Receiver::new();
-        // Half the symbols, then a "reload".
+        // Half the symbols in two exports, then a "reload".
         let k = tx.source_symbols() as usize;
-        let mut fed = 0;
-        while fed < k / 2 {
-            for t in tx.next_frame_tiles(7) {
-                rx.accept(t);
-                fed += 1;
+        let mut saved = Vec::new();
+        for part in 1..=2 {
+            let mut fed = 0;
+            while fed < k / 4 {
+                for t in tx.next_frame_tiles(7) {
+                    rx.accept(t);
+                    fed += 1;
+                }
             }
+            saved.push(rx.export());
+            assert!(count(&saved[part - 1]) > k / 4 - 10, "part {part}");
         }
-        let saved = rx.export();
-        assert!(saved.len() > 8 + DATA_BYTES * (k / 2 - 10));
         let mut fresh = Receiver::new();
-        assert!(fresh.import(&saved) > 0);
+        let read: i32 = saved.iter().map(|chunk| fresh.import(chunk)).sum();
+        assert_eq!(read as usize, count(&saved[0]) + count(&saved[1]));
         assert!(fresh.stats_json().contains("\"name\":\"a_b.bin\""));
         while fresh.file().is_none() {
             for t in tx.next_frame_tiles(7) {
@@ -650,15 +687,6 @@ mod tests {
     fn meta_tile(meta: &diodecam_core::Meta) -> Tile {
         let bytes = meta.to_bytes();
         Tile::meta(diodecam_core::Meta::from_bytes(&bytes).unwrap().tag(), bytes)
-    }
-
-    fn export_of(tiles: &[Tile]) -> Vec<u8> {
-        let mut out = EXPORT_MAGIC.to_vec();
-        out.extend_from_slice(&(tiles.len() as u32).to_be_bytes());
-        for t in tiles {
-            out.extend_from_slice(&t.to_bytes());
-        }
-        out
     }
 
     fn field<'a>(json: &'a str, key: &str) -> &'a str {
@@ -713,10 +741,10 @@ mod tests {
             oti: [0; 12],
             filename: "e".into(),
         };
-        let bytes = export_of(&[meta_tile(&meta)]);
         let mut rx = Receiver::new();
         for _ in 0..1000 {
-            rx.import(&bytes);
+            rx.accept(meta_tile(&meta));
+            rx.finish();
         }
         let json = rx.stats_json();
         assert_eq!(field(&json, "kept"), "0");
@@ -763,11 +791,80 @@ mod tests {
         let mut rx = Receiver::new();
         // DATA with no META: every distinct tile is answered Pending.
         for esi in 0..50 {
-            rx.accept_up_to(Tile::data(0x1234, 0, esi, [0; 96]), 10);
+            rx.accept_with(Tile::data(0x1234, 0, esi, [0; 96]), true, 10);
         }
         assert_eq!(rx.kept.len(), 10);
         assert_eq!(rx.kept_ids.len(), 10, "kept_ids must stop at the cap");
         assert_eq!(rx.kept.last().map(|t| t.esi), Some(9), "the first ones are kept");
+        assert_eq!(count(&rx.export()), 0, "nothing is exported before META");
+        assert_eq!(rx.kept.len(), 10, "nor forgotten");
+    }
+
+    #[test]
+    fn an_export_holds_the_tiles_since_the_last_one() {
+        let data: Vec<u8> = (0..20_000u32).map(|i| (i * 7 + i / 5) as u8).collect();
+        let mut tx = Transfer::prepare(&data, "a.bin", SendOptions { compress: false }, 0).unwrap();
+        let tag = tx.meta().tag();
+        let mut tiles: Vec<Tile> = (0..30).flat_map(|_| tx.next_frame_tiles(7)).collect();
+        let meta = tiles.iter().find(|t| t.kind == TileKind::Meta).unwrap().clone();
+        tiles.retain(|t| t.kind == TileKind::Data);
+        let (a, rest) = tiles.split_at(40);
+        let (b, c) = rest.split_at(40);
+        let mut rx = Receiver::new();
+        // Before META: Pending, kept once each; a foreign tile is never exported.
+        for t in a.iter().chain(a) {
+            rx.accept(t.clone());
+        }
+        rx.accept(Tile::data(tag ^ 1, 0, 0, [0; 96]));
+        assert_eq!(rx.kept_ids.len(), 41);
+        rx.accept(meta.clone());
+        assert!(rx.kept_ids.is_empty(), "after META the assembler de-duplicates");
+        let first = rx.export();
+        assert_eq!(count(&first), 41, "META and the 40 held tiles");
+        assert_eq!(count(&rx.export()), 0, "then nothing until more arrive");
+        // New tiles plus repeats of exported ones: only the new ones, and no second META.
+        for t in b.iter().chain(a).chain([&meta]) {
+            rx.accept(t.clone());
+        }
+        let second = rx.export();
+        assert_eq!(count(&second), 40);
+        let kind = |b: &[u8]| Tile::from_bytes(b.try_into().unwrap()).unwrap().kind;
+        assert!(second[8..].chunks_exact(DATA_BYTES).all(|b| kind(b) == TileKind::Data));
+        assert_eq!(field(&rx.stats_json(), "kept"), "0");
+        // Past the cap nothing more is kept until the next export.
+        for t in &c[..20] {
+            rx.accept_with(t.clone(), true, 5);
+        }
+        assert_eq!(count(&rx.export()), 5);
+        for t in &c[20..30] {
+            rx.accept_with(t.clone(), true, 5);
+        }
+        assert_eq!(count(&rx.export()), 5, "kept again after the export");
+        // A reload imports every export; what it imported is not exported again.
+        let mut fresh = Receiver::new();
+        for chunk in [&first, &second] {
+            assert!(fresh.import(chunk) > 0);
+        }
+        assert_eq!(count(&fresh.export()), 0, "imported tiles are saved already");
+        for t in a.iter().chain(b).chain([&meta]) {
+            fresh.accept(t.clone());
+        }
+        assert_eq!(count(&fresh.export()), 0, "nor kept when the camera reads them again");
+        fresh.accept(c[30].clone());
+        assert_eq!(count(&fresh.export()), 1);
+    }
+
+    #[test]
+    fn imported_tiles_before_meta_are_not_kept_again() {
+        let tiles: Vec<Tile> = (0..5).map(|esi| Tile::data(0x1234, 0, esi, [0; 96])).collect();
+        let mut rx = Receiver::new();
+        assert_eq!(rx.import(&export_of(&tiles)), 5);
+        for t in &tiles {
+            rx.accept(t.clone());
+        }
+        assert!(rx.kept.is_empty());
+        rx.accept(Tile::data(0x1234, 0, 5, [0; 96]));
+        assert_eq!(rx.kept.len(), 1);
     }
 
     #[test]
