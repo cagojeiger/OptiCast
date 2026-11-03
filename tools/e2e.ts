@@ -242,7 +242,7 @@ try {
   const seconds = (Date.now() - startedAt) / 1000
   // A straight receive shows its time and speed on the strip; a resumed one shows when it arrived.
   const shown = ((await page.getByTestId('percent').textContent()) ?? '').trim()
-  const speedShown = args['reload-after'] ? shown.startsWith('at ') : /^(under 1 s|\d+ (h|min|s)( \d+ (min|s))?) · \d+(\.\d+)? (B|KB|MB|GB)\/s$/.test(shown)
+  const speedShown = args['reload-after'] ? shown.startsWith('at ') : /^(\d\.\d s|\d+ (h|min|s)( \d+ (min|s))?) · \d+(\.\d+)? (B|KB|MB|GB)\/s$/.test(shown)
   console.log(`speed    strip shows "${shown}"`)
   const stats = JSON.parse((await page.getByTestId('debug').textContent()) || '{}')
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByTestId('download').click()])

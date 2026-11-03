@@ -76,14 +76,15 @@ export function view(v) {
     strip = { state: 'error', label: '✕ Error', symbols: '', extra: v.fatal || v.notice?.text || '', right: '' }
   } else if (done && offer) {
     // The measured time and speed when there is one (a straight receive), else when it arrived.
-    // Under a second there is no speed to speak of; above it the speed uses the seconds shown.
-    const secs = offer.took === null ? 0 : Math.round(offer.took)
+    // Under a second there is no speed to speak of. Short times keep a decimal, so the time shown
+    // and the speed (from the exact time) agree within rounding.
+    const took = offer.took
     const right =
-      offer.took === null
+      took === null
         ? `at ${new Date(offer.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-        : secs < 1
+        : took < 1
           ? 'under 1 s'
-          : `${formatSeconds(secs)} · ${formatBytes(Math.round(offer.size / secs))}/s`
+          : `${took < 10 ? `${took.toFixed(1)} s` : formatSeconds(Math.round(took))} · ${formatBytes(Math.round(offer.size / took))}/s`
     strip = { state: 'done', label: '✓ Received', symbols: 'SHA-256 verified', extra: '', right }
   } else if (receiving) {
     const read = v.rate === null ? '' : `${Math.round(v.rate * 100)}% read`

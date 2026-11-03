@@ -190,8 +190,9 @@ describe('view', () => {
     assert.equal(view(state({ offer: offer(false, { downloaded: true }) })).hint.text, 'Download started. Check it, then press q in the terminal')
     assert.equal(view(state({ offer: offer(true, { downloaded: true, saved: true }) })).hint.text, 'Saved. You can start the next file.')
     // A straight receive shows how long it took and the speed; otherwise (restored, paused, resumed) when it arrived.
-    assert.equal(view(state({ offer: offer(true, { took: 31.2 }) })).strip.right, '31 s · 19.4 KB/s')
-    assert.equal(view(state({ offer: offer(true, { took: 1.01 }) })).strip.right, '1 s · 600.0 KB/s', 'the speed agrees with the seconds shown')
+    assert.equal(view(state({ offer: offer(true, { took: 31.2 }) })).strip.right, '31 s · 19.2 KB/s')
+    assert.equal(view(state({ offer: offer(true, { took: 3.63 }) })).strip.right, '3.6 s · 165.3 KB/s', 'short times keep a decimal')
+    assert.equal(view(state({ offer: offer(true, { took: 1.01 }) })).strip.right, '1.0 s · 594.1 KB/s', 'the time shown agrees with the speed')
     assert.equal(view(state({ offer: offer(true, { took: 0.04 }) })).strip.right, 'under 1 s', 'no speed from a single frame')
     assert.match(view(state({ offer: offer(true, { restored: true }) })).strip.right, /^at /)
     const error = view(state({ notice: { text: 'No camera found on this device.', tone: 'bad' } }))
